@@ -1,0 +1,19 @@
+.lp-pagination {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-top: 0;
+}
+
+.lp-pagination button {
+    margin: 5px;
+    color: inherit;
+}
+
+.lp-page-count-page {
+    font-weight: 600;
+}
+
+.lp-page-size-dropdown {
+    font-size: 13px !important;
+}

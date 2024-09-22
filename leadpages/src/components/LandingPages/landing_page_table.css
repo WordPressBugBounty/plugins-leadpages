@@ -1,0 +1,135 @@
+@import "../../styles/global.css";
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table-data {
+    padding: 12px;
+    height: 30px;
+    font-weight: 500;
+}
+
+.page-name {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--main-blue-color);
+}
+
+.page-wp_slug {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Table header styles */
+
+.column-header {
+    background-color: #ffffff;
+    padding: 16px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #000000;
+    text-align: left;
+}
+
+.sortable-header {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    color: var(--main-blue-color);
+    background-color: transparent;
+    border: none;
+    padding: 0px;
+}
+
+/* Controls sorting caret as up/down */
+
+.caret.up {
+    transform: rotate(180deg);
+    transition: 0.2s ease;
+}
+
+.caret.down {
+    transform: rotate(0);
+    transition: 0.2s ease;
+}
+
+/* Each column header has a unique width */
+
+.column-name {
+    width: 338px;
+}
+
+.column-wp_slug {
+    width: 200px;
+}
+
+.column-visitors {
+    width: 100px;
+}
+
+.column-conversion_rate {
+    width: 110px;
+}
+
+.column-last_published {
+    width: 130px;
+}
+
+/* Rows */
+
+.table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.table tr:nth-child(odd) {
+    background-color: #ebe9e9;
+}
+
+/* Page action links */
+
+.actions {
+    display: flex;
+    font-weight: 400;
+    margin-top: 5px;
+    align-items: center;
+}
+
+.action-link {
+    color: var(--main-blue-color);
+    text-decoration: none;
+}
+
+.edit-link,
+.publish-link,
+.unpublish-link {
+    color: var(--main-blue-color);
+    text-decoration: none;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+}
+.publish-link {
+    color: #008000;
+}
+.unpublish-link {
+    color: #e26f56;
+}
+.edit-link {
+    padding-left: 0;
+}
+
+/* Handles line separators between action links */
+
+.actions > a:not(:last-child)::after,
+.actions > button:not(:last-child)::after {
+    content: "|";
+    margin-left: 6px;
+    color: #757575;
+    text-decoration: none;
+}

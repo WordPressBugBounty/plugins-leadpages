@@ -1,0 +1,66 @@
+/* Styling handled for Landing Pages */
+
+.root {
+    margin: 20px 20px 2px 0px;
+}
+
+.heading {
+    font-size: 23px;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+.search-container {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 15px;
+}
+
+.search-input {
+    width: 200px;
+    padding: 0 10px;
+}
+
+/* Search bar in mobile */
+@media only screen and (max-width: 530px) {
+    .search-container {
+        justify-content: flex-start;
+    }
+}
+
+/* Search / Refresh buttons */
+.components-button.is-secondary {
+    background-color: #fff;
+    gap: 5px;
+}
+
+.components-button.is-secondary:hover {
+    background-color: #f0f0f1;
+}
+
+/* fixing the width so that layout doesn't shift between "search" and "clear" text */
+.search-button {
+    display: block;
+    text-align: center;
+    margin-left: 10px;
+    width: 70px;
+}
+
+.refresh-button {
+    margin-left: 14px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.refresh-button:disabled img {
+    filter: invert(57%) sepia(31%) saturate(0%) hue-rotate(205deg) brightness(96%) contrast(95%);
+}
+
+/* Loading state for navigating between tabs/fetching new data */
+.loading-cell {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 30vh;
+}
