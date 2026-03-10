@@ -1,0 +1,13 @@
+@import "../styles/wordpress_global.css";
+
+.card {
+    width: 438px;
+}
+
+.account-header {
+    margin-top: 0px;
+}
+
+.settings-card {
+    width: 438px;
+}

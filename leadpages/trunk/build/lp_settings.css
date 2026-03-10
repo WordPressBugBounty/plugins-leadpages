@@ -1,0 +1,167 @@
+@import url(https://static.leadpages.net/fonts/valueserif_typeset.css);
+@import url(https://static.leadpages.net/fonts/apercu_typeset.css);
+@import url(https://fonts.googleapis.com/css?family=Open+Sans:400,600,700&display=swap);
+/*
+* This is a css style sheet that attempts to replicate the theme of leadpages.com
+* It is not a perfect replication of the design used but it is good enough for our 
+* needs here in the plugin.
+*
+* Refer to our UI components library for further context of button styles.
+*/
+
+:root {
+    /* Button Colors */
+    --main-blue-color: #3858e9;
+    --lp-purple: #603eff;
+    --lp-purple-hover: #4d32cc;
+    --contrast-text: #ffffff;
+    --focus: #f0f0f1;
+    --hover: #cccccc;
+
+    /* Alert Colors */
+    --lp-error: #bf0711;
+    --lp-error-dark: #330101;
+    --lp-error-light: #f8d7da;
+    --lp-info: #00848e;
+    --lp-info-dark: #003135;
+    --lp-info-light: #e0f5f5;
+}
+
+/* Marketing themed button */
+.marketing-button {
+    font-family: Apercu Pro;
+    padding: 12px 24px 12px 24px;
+    font-size: 16px;
+    border-radius: 24px;
+    height: 40px;
+}
+
+/* Product themed button */
+.product-button {
+    font-family: Open Sans;
+    padding: 8px 16px;
+    font-size: 14px;
+    transition: 0.3s;
+    letter-spacing: 0.0625rem;
+    text-transform: uppercase;
+}
+
+/* Contained style */
+.contained {
+    color: var(--contrast-text);
+    background-color: var(--lp-purple);
+}
+
+.contained:hover,
+.contained:focus {
+    color: var(--contrast-text);
+    background-color: var(--lp-purple-hover);
+    transition: 0.3s;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Outlined style */
+.outlined {
+    color: var(--lp-purple);
+    background-color: var(--contrast-text);
+    border-radius: 28px;
+    border: 1px solid var(--lp-purple);
+}
+
+.outlined:hover,
+.outlined:focus {
+    color: var(--lp-purple);
+    background-color: var(--hover);
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Text style */
+.text {
+    color: var(--lp-purple);
+    background-color: var(--contrast-text);
+    border: none;
+    font-weight: 600;
+}
+
+.text:hover,
+.text:focus {
+    color: var(--lp-purple-hover);
+    background-color: var(--focus);
+    border: none;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* Alert styles */
+.lp-alert {
+    font-family: Apercu Pro;
+    border-radius: 2px;
+    padding: 6px 16px;
+    font-weight: 400;
+    line-height: 1.25rem;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+}
+
+.lp-alert-error {
+    background-color: var(--lp-error-light);
+    color: var(--lp-error-dark);
+}
+
+.lp-alert-info {
+    background-color: var(--lp-info-light);
+    color: var(--lp-info-dark);
+}
+
+.lp-alert-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+}
+
+.lp-error-icon {
+    color: var(--lp-error);
+    fill: var(--lp-error);
+}
+
+.lp-info-icon {
+    color: var(--lp-info);
+    fill: var(--lp-info);
+}
+
+.lp-alert-message {
+    padding: 9px 0 6px;
+    font-size: 0.9375rem;
+}
+
+.lp-message-error {
+    color: var(--lp-error-dark);
+}
+
+.lp-message-info {
+    color: var(--lp-info-dark);
+}
+
+:root{--text-color:#525459}.modal-root{align-items:center;display:flex;flex-direction:column;line-height:24px;margin-bottom:20px;text-align:center}.modal-root p{font-family:Open Sans}.cta-buttons{align-items:center;display:flex;gap:10px;margin-top:20px}.sign-out-header{color:var(--text-color);font-family:Value Serif;font-size:30px;margin-bottom:0;margin-top:25px}.sign-out-body{color:var(--text-color);font-size:15px;line-height:24px}.support-link{color:var(--lp-purple);margin-top:0}
+/* Root styles for each page view */
+.root {
+    margin: 20px 20px 2px 0px;
+}
+
+/* Plugin name heading */
+.heading {
+    font-size: 23px;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+.lp-notice {
+    margin-left: 0px;
+    margin-right: 0px;
+    margin-top: 15px;
+}
+
+.card{width:438px}.account-header{margin-top:0}.settings-card{width:438px}

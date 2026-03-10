@@ -1,0 +1,172 @@
+@import url(https://static.leadpages.net/fonts/valueserif_typeset.css);
+@import url(https://static.leadpages.net/fonts/apercu_typeset.css);
+@import url(https://fonts.googleapis.com/css?family=Open+Sans:400,600,700&display=swap);
+.lp-pagination{align-items:center;display:flex;justify-content:flex-end;margin-top:0}.lp-pagination button{color:inherit;margin:5px}.lp-page-count-page{font-weight:600}.lp-page-size-dropdown{font-size:13px!important}
+/* Root styles for each page view */
+.root {
+    margin: 20px 20px 2px 0px;
+}
+
+/* Plugin name heading */
+.heading {
+    font-size: 23px;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+.lp-notice {
+    margin-left: 0px;
+    margin-right: 0px;
+    margin-top: 15px;
+}
+
+.table{border-collapse:collapse;width:100%}.table-data{font-weight:500;height:30px;padding:12px}.page-name{color:var(--main-blue-color);max-width:300px}.page-name,.page-wp_slug{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.page-wp_slug{max-width:200px}.column-header{background-color:#fff;color:#000;font-size:11px;font-weight:600;padding:16px 12px;text-align:left}.sortable-header{align-items:center;background-color:transparent;border:none;color:var(--main-blue-color);cursor:pointer;display:flex;padding:0}.caret.up{transform:rotate(180deg);transition:.2s ease}.caret.down{transform:rotate(0);transition:.2s ease}.column-name{width:338px}.column-wp_slug{width:200px}.column-visitors{width:100px}.column-conversion_rate{width:110px}.column-last_published{width:130px}.table tr:nth-child(2n){background-color:#f9f9f9}.table tr:nth-child(odd){background-color:#ebe9e9}.actions{align-items:center;display:flex;font-weight:400;margin-top:5px}.action-link,.edit-link,.publish-link,.unpublish-link{color:var(--main-blue-color);text-decoration:none}.edit-link,.publish-link,.unpublish-link{background-color:transparent;border:none;cursor:pointer}.publish-link{color:green}.unpublish-link{color:#e26f56}.edit-link{padding-left:0}.actions>a:not(:last-child):after,.actions>button:not(:last-child):after{color:#757575;content:"|";margin-left:6px;text-decoration:none}
+.root{margin:20px 20px 2px 0}.heading{font-size:23px;font-weight:400;line-height:1.3}.lp-notice{margin-left:0;margin-right:0;margin-top:15px}
+.lp-modal p{line-height:20px;margin:0}.lp-modal h1{font-size:20px!important;font-weight:400!important}.lp-modal h4{font-size:14px;line-height:20px;margin:0}.lp-modal input{border:1px solid #949494;border-radius:2px;color:#949494;height:36px;padding:0 16px;width:100%}.modal-grey{color:#757575}.modal-notice{margin:0}.modal-section-break{margin:16px -32px}.modal-section{display:flex;flex-direction:column;gap:16px;margin:16px 0}.modal-section-header{display:flex;flex-direction:column;gap:8px}.modal-page-info{font-weight:600;margin:0}.modal-slug{align-items:center;display:flex;gap:8px;justify-content:flex-start}.modal-actions{display:flex;gap:12px;justify-content:flex-end}.modal-action-padding{padding-top:24px}.modal-button{width:-moz-fit-content;width:fit-content}
+/*
+* This is a css style sheet that attempts to replicate the theme of leadpages.com
+* It is not a perfect replication of the design used but it is good enough for our 
+* needs here in the plugin.
+*
+* Refer to our UI components library for further context of button styles.
+*/
+
+:root {
+    /* Button Colors */
+    --main-blue-color: #3858e9;
+    --lp-purple: #603eff;
+    --lp-purple-hover: #4d32cc;
+    --contrast-text: #ffffff;
+    --focus: #f0f0f1;
+    --hover: #cccccc;
+
+    /* Alert Colors */
+    --lp-error: #bf0711;
+    --lp-error-dark: #330101;
+    --lp-error-light: #f8d7da;
+    --lp-info: #00848e;
+    --lp-info-dark: #003135;
+    --lp-info-light: #e0f5f5;
+}
+
+/* Marketing themed button */
+.marketing-button {
+    font-family: Apercu Pro;
+    padding: 12px 24px 12px 24px;
+    font-size: 16px;
+    border-radius: 24px;
+    height: 40px;
+}
+
+/* Product themed button */
+.product-button {
+    font-family: Open Sans;
+    padding: 8px 16px;
+    font-size: 14px;
+    transition: 0.3s;
+    letter-spacing: 0.0625rem;
+    text-transform: uppercase;
+}
+
+/* Contained style */
+.contained {
+    color: var(--contrast-text);
+    background-color: var(--lp-purple);
+}
+
+.contained:hover,
+.contained:focus {
+    color: var(--contrast-text);
+    background-color: var(--lp-purple-hover);
+    transition: 0.3s;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Outlined style */
+.outlined {
+    color: var(--lp-purple);
+    background-color: var(--contrast-text);
+    border-radius: 28px;
+    border: 1px solid var(--lp-purple);
+}
+
+.outlined:hover,
+.outlined:focus {
+    color: var(--lp-purple);
+    background-color: var(--hover);
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Text style */
+.text {
+    color: var(--lp-purple);
+    background-color: var(--contrast-text);
+    border: none;
+    font-weight: 600;
+}
+
+.text:hover,
+.text:focus {
+    color: var(--lp-purple-hover);
+    background-color: var(--focus);
+    border: none;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* Alert styles */
+.lp-alert {
+    font-family: Apercu Pro;
+    border-radius: 2px;
+    padding: 6px 16px;
+    font-weight: 400;
+    line-height: 1.25rem;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+}
+
+.lp-alert-error {
+    background-color: var(--lp-error-light);
+    color: var(--lp-error-dark);
+}
+
+.lp-alert-info {
+    background-color: var(--lp-info-light);
+    color: var(--lp-info-dark);
+}
+
+.lp-alert-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+}
+
+.lp-error-icon {
+    color: var(--lp-error);
+    fill: var(--lp-error);
+}
+
+.lp-info-icon {
+    color: var(--lp-info);
+    fill: var(--lp-info);
+}
+
+.lp-alert-message {
+    padding: 9px 0 6px;
+    font-size: 0.9375rem;
+}
+
+.lp-message-error {
+    color: var(--lp-error-dark);
+}
+
+.lp-message-info {
+    color: var(--lp-info-dark);
+}
+
+:root{--text-color:#525459}.modal-root{align-items:center;display:flex;flex-direction:column;line-height:24px;margin-bottom:20px;text-align:center}.modal-root p{font-family:Open Sans}.cta-buttons{align-items:center;display:flex;gap:10px;margin-top:20px}.sign-out-header{color:var(--text-color);font-family:Value Serif;font-size:30px;margin-bottom:0;margin-top:25px}.sign-out-body{color:var(--text-color);font-size:15px;line-height:24px}.support-link{color:var(--lp-purple);margin-top:0}
+.search-container{display:flex;justify-content:flex-end;margin-bottom:15px}.search-input{padding:0 10px;width:200px}@media only screen and (max-width:530px){.search-container{justify-content:flex-start}}.components-button.is-secondary{background-color:#fff;gap:5px}.components-button.is-secondary:hover{background-color:#f0f0f1}.search-button{display:block;margin-left:10px;text-align:center;width:70px}.refresh-button{align-items:center;display:flex;gap:3px;margin-left:14px}.refresh-button:disabled img{filter:invert(57%) sepia(31%) saturate(0) hue-rotate(205deg) brightness(96%) contrast(95%)}.loading-cell{align-items:center;display:flex;height:30vh;justify-content:center}
+.login-root{display:flex;gap:20px}.left-container{align-items:center;display:flex;flex-direction:column;gap:24px;margin-top:20vh;min-width:45%;text-align:center}.right-container{align-items:center;display:flex;justify-content:center;min-width:55%;position:relative}.right-container img{max-height:90vh;max-width:100%}@media screen and (max-width:768px){.login-root{flex-wrap:wrap;justify-content:center}.left-container,.right-container{margin-top:20px!important;max-width:50%}}.login-title{font-family:Value Serif;line-height:1.2;padding-right:10px}.sign-up-button{left:50%;position:absolute;transform:translateX(-50%)}.alert{min-width:300px}.rotate-180{transform:rotate(180deg)}

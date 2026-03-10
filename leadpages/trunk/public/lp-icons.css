@@ -1,0 +1,28 @@
+/* Leadpages Icons */
+
+@font-face {
+    font-family: "lp-icons";
+    font-style: normal;
+    font-weight: normal;
+    font-display: auto;
+    src: url("https://static.leadpages.net/icons/v38/LeadPages-Icons.LeadPages-Icons.eot");
+    src:
+        url("https://static.leadpages.net/icons/v38/LeadPages-Icons.woff") format("woff"),
+        url("https://static.leadpages.net/icons/v38/LeadPages-Icons.woff2") format("woff2"),
+        url("https://static.leadpages.net/icons/v38/LeadPages-Icons.ttf") format("truetype"),
+        url("https://static.leadpages.net/icons/v38/LeadPages-Icons.svg#LeadPages-Icons") format("svg");
+}
+
+/* add the leadpages "lp-symbol" icon as the top level menu icon for the plugin */
+#toplevel_page_leadpages .wp-menu-image::before {
+    content: "\e60b";
+    direction: ltr;
+    display: inline-block;
+    font: normal 1.25rem/1.4 "lp-icons";
+    padding-top: 3px;
+    text-transform: none;
+    letter-spacing: normal;
+    vertical-align: middle;
+    white-space: nowrap;
+    word-wrap: normal;
+}
