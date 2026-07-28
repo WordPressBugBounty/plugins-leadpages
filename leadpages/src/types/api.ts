@@ -16,7 +16,10 @@ export interface LandingPage {
     uuid: string;
     wp_slug: string;
     lp_slug: string;
-    kind: 'LeadpageV3' | 'LeadpageSplitTestV2';
+    kind: 'LeadpageV3' | 'LeadpageSplitTestV2' | 'NovaPage';
+    // Present on rows synced from the new Leadpages (Nova) platform.
+    platform?: 'classic' | 'nova';
+    nova_page_id?: string;
 }
 
 export interface LandingPageResponse {
@@ -37,13 +40,24 @@ export interface LoginStatusResponse {
     isLoggedIn: boolean;
 }
 
+export interface NovaStatusResponse {
+    isConnected: boolean;
+    platform: string;
+}
+
 /**
  * This is not an exhaustive list of possible error codes that could be returned from the server
  * or the perfect typing of the error response format. Be smart. Inspect the response object
  * and use this just to make TypeScript happy
  */
 
-export type ErrorCodes = 'name_conflict' | 'lp_sync_error' | 'lp_error' | 'lp_wp_error' | 'rest_invalid_param';
+export type ErrorCodes =
+    | 'name_conflict'
+    | 'slug_taken_by_page'
+    | 'lp_sync_error'
+    | 'lp_error'
+    | 'lp_wp_error'
+    | 'rest_invalid_param';
 
 export interface WPResponseError {
     code: ErrorCodes;

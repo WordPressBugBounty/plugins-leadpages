@@ -11,6 +11,7 @@ use Leadpages\models\Options;
 use Leadpages\models\exceptions\DatabaseError;
 use Leadpages\rest\pages\Schema;
 use Leadpages\providers\http\Client;
+use Leadpages\providers\http\auth\OAuthAuthProvider;
 use Leadpages\providers\http\exceptions\HttpException;
 use Leadpages\providers\config\Config;
 use Leadpages\providers\http\exceptions\AuthException;
@@ -32,11 +33,11 @@ class Controller extends \WP_REST_Controller {
     private $client;
     /** @var Config */
     private $config;
-    /** @var string|null the users api if it exists */
-    private $access_token;
 
     public function __construct() {
-        $this->client = new Client();
+        // The classic pages sync is an OAuth-authenticated backend, so the client authenticates
+        // and refreshes tokens through the classic OAuth provider.
+        $this->client = new Client(OAuthAuthProvider::for_classic());
         $this->config = Config::get_instance();
     }
 
@@ -225,12 +226,17 @@ class Controller extends \WP_REST_Controller {
         $slug = $request->get_param('slug');
         $connected = $request->get_param('published');
         $type = $request->get_param('pageType');
+        $replace = $request->get_param('replace');
 
         try {
             $page = Page::get($id);
             if (!$page) {
                 return new \WP_Error('not_found', 'Page not found', [ 'status' => 404 ]);
             }
+
+            // The page currently holding the target slug that we will hand the slug off from
+            // (replace path), if any. Resolved during the collision check below.
+            $handoff_page = null;
 
             if ($slug) {
                 // if the slug is being updated we need to check for collisions with other landing pages
@@ -246,9 +252,25 @@ class Controller extends \WP_REST_Controller {
 
                 $conflicting_page = Page::get_by_slug($slug);
                 if ($conflicting_page && $conflicting_page->id !== $page->id) {
-                    $t = $conflicting_page->name;
-                    $message = "Landing page `$t` is already published under this slug";
-                    return new \WP_Error('name_conflict', $message, [ 'status' => 409 ]);
+                    // Another landing page (possibly on the other platform) holds this slug. Unless the
+                    // caller opts to replace it, return a distinct code so the UI can offer the hand-off.
+                    if (! $replace) {
+                        $t = $conflicting_page->name;
+                        $message = "Landing page `$t` is already published under this slug";
+                        return new \WP_Error(
+                            'slug_taken_by_page',
+                            $message,
+                            [
+                                'status'          => 409,
+                                'conflictingName' => $conflicting_page->name,
+                                'slug'            => $slug,
+                            ]
+                        );
+                    }
+
+                    // Defer the actual unpublish + re-bind to the atomic block below so they commit
+                    // together (the URL is preserved).
+                    $handoff_page = $conflicting_page;
                 }
             }
 
@@ -257,7 +279,67 @@ class Controller extends \WP_REST_Controller {
                 'connected'    => $connected,
                 'wp_page_type' => $type,
             ];
-            Page::update($id, $data);
+
+            // Hand-off + (re)bind, ordered and compensated so a mid-flight failure cannot strand the
+            // URL. wp_slug is UNIQUE, so the page currently at the slug must be unpublished before the
+            // target can take it; if the subsequent re-bind then fails (e.g. a concurrent publish
+            // claimed the slug), we restore the handed-off page so its URL is never left unbound. (An
+            // explicit DB transaction is intentionally avoided: WordPress's test harness already holds
+            // an open transaction and MySQL cannot nest them.)
+            if ($handoff_page) {
+                Page::update(
+                    (int) $handoff_page->id,
+                    [
+                        'connected'    => false,
+                        'wp_slug'      => null,
+                        'wp_page_type' => null,
+                    ]
+                );
+            }
+
+            try {
+                Page::update($id, $data);
+            } catch (\Throwable $rebind_error) {
+                if ($handoff_page) {
+                    // Compensate: give the slug back to the page we just unpublished.
+                    try {
+                        Page::update(
+                            (int) $handoff_page->id,
+                            [
+                                'connected'    => true,
+                                'wp_slug'      => $slug,
+                                'wp_page_type' => $handoff_page->wp_page_type,
+                            ]
+                        );
+                    } catch (\Throwable $restore_error) {
+                        $this->debug(
+                            'Failed to restore handed-off page after a re-bind failure: '
+                                . $restore_error->getMessage(),
+                            __METHOD__
+                        );
+                    }
+                }
+                // A concurrent publish may have claimed the slug between the collision check and this
+                // write. Surface the 409 the UI already understands rather than a generic 500.
+                $current = Page::get_by_slug($slug);
+                if ($current && (int) $current->id !== (int) $id) {
+                    return new \WP_Error(
+                        'slug_taken_by_page',
+                        'That slug was just taken by another page',
+                        [
+                            'status' => 409,
+                            'slug'   => $slug,
+                        ]
+                    );
+                }
+                throw $rebind_error;
+            }
+
+            // Clear the handed-off page's cache only after the re-bind succeeds, so a failed hand-off
+            // never leaves its URL both uncached and unbound (serving nothing).
+            if ($handoff_page) {
+                Cache::delete($this->page_cache_key($handoff_page));
+            }
         } catch (DatabaseError $e) {
             return new \WP_Error('lp_wp_error', 'Could not update page', [ 'status' => 500 ]);
         } catch (\Exception $e) {
@@ -269,10 +351,24 @@ class Controller extends \WP_REST_Controller {
         // connected under is changed, any cached data for that page needs to be cleared.
         // Otherwise the page would continue to be served under the old slug.
         if (false === $connected || $slug !== $page->wp_slug) {
-            Cache::delete(Cache::page_key($page->wp_slug));
+            Cache::delete($this->page_cache_key($page));
         }
 
         return new WP_REST_Response(null, 204);
+    }
+
+    /**
+     * Build the serving cache key for a page, honoring its platform. Nova pages are keyed with the
+     * platform and nova_page_id so the key matches the one the Proxy serves under.
+     *
+     * @param object $page
+     * @return string
+     */
+    private function page_cache_key( $page ) {
+        if (isset($page->platform) && 'nova' === $page->platform) {
+            return Cache::page_key($page->wp_slug, 'nova', $page->nova_page_id);
+        }
+        return Cache::page_key($page->wp_slug);
     }
 
     /**
@@ -286,15 +382,25 @@ class Controller extends \WP_REST_Controller {
             return false;
         }
 
-        $logged_in = $this->is_user_logged_into_plugin();
-        if (! $logged_in) {
+        if (! $this->is_connected_to_active_platform()) {
             return new \WP_Error('no_token', 'User is not logged in?', [ 'status' => 401 ]);
         }
 
-        // save the access token on the class so we don't need to get it again when handling the request
-        $token = Options::get(Options::$access_token);
-        $this->access_token = $token;
         return true;
+    }
+
+    /**
+     * Whether the user is connected to whichever platform this install is using. Nova connections
+     * are tracked by the Nova tokens; Classic by the classic tokens.
+     *
+     * @return bool
+     */
+    private function is_connected_to_active_platform() {
+        if ('nova' === Options::get(Options::$platform)) {
+            return ! empty(Options::get(Options::$nova_access_token))
+                && ! empty(Options::get(Options::$nova_refresh_token));
+        }
+        return $this->is_user_logged_into_plugin();
     }
 
     /**
@@ -312,6 +418,10 @@ class Controller extends \WP_REST_Controller {
      * @return WP_Error|WP_REST_Response
      */
     public function sync_items() {
+        if ('nova' === Options::get(Options::$platform)) {
+            return $this->sync_nova_items();
+        }
+
         $last_page_sync = Options::get(Options::$last_page_sync_date);
         $this->debug('Last page sync: ' . $last_page_sync);
 
@@ -497,12 +607,10 @@ class Controller extends \WP_REST_Controller {
      */
     private function fetch_pages( $query_array, $retry = true ) {
         try {
+            // The client authenticates the request through its OAuth provider.
             $response = $this->client->get(
                 $this->config->get('PAGES_API_URL'),
                 [
-                    'headers' => [
-                        'Authorization' => 'Bearer ' . $this->access_token,
-                    ],
                     'query'   => $query_array,
                     'timeout' => 10,
                 ]
@@ -521,6 +629,186 @@ class Controller extends \WP_REST_Controller {
         }
 
         return $response;
+    }
+
+    /**
+     * Sync a Nova (new Leadpages) account's published pages into the local table. Unlike the
+     * Classic sync, Nova returns the full set of published pages in a single call (no cursor), so
+     * deletions are reconciled by diffing the returned ids against the stored Nova rows. Analytics
+     * are fetched best-effort afterwards.
+     *
+     * @return WP_Error|WP_REST_Response
+     */
+    private function sync_nova_items() {
+        $client = new Client(OAuthAuthProvider::for_nova());
+
+        try {
+            $pages = $this->fetch_nova_pages($client);
+
+            $seen_ids = [];
+            foreach ($pages as $nova_page) {
+                if (empty($nova_page->id)) {
+                    continue;
+                }
+                $seen_ids[] = $nova_page->id;
+
+                $existing = Page::get($nova_page->id);
+                if (! $existing) {
+                    Page::create($nova_page, 'nova');
+                } else {
+                    Page::update($nova_page->id, $nova_page, 'nova');
+                }
+            }
+
+            // Defense-in-depth against mass-unpublish: if the sync returned zero ids while stored
+            // Nova rows still exist, treat it as suspect (a genuine "unpublished everything" is rare
+            // and self-heals — an unpublished page already 404s at serve time via NovaPageSource) and
+            // skip deletion reconciliation rather than tombstone every live page. Reconcile only when
+            // we have at least one returned id, or when there is nothing stored to lose.
+            $stored_nova_pages = Page::get_nova_pages();
+            if (empty($seen_ids) && ! empty($stored_nova_pages)) {
+                $this->debug(
+                    'Nova sync returned zero pages while ' . count($stored_nova_pages)
+                        . ' Nova rows exist; skipping deletion reconcile to avoid mass-unpublish',
+                    __METHOD__
+                );
+            } else {
+                $this->reconcile_deleted_nova_pages($seen_ids);
+            }
+            $this->sync_nova_analytics($client);
+
+            Options::set(Options::$last_page_sync_date, gmdate('Y-m-d H:i:s.uP'));
+        } catch (AuthException $e) {
+            return new \WP_Error('leadpages_auth_error', 'User is not logged in?', [ 'status' => 400 ]);
+        } catch (HttpException $e) {
+            return new \WP_Error('leadpages_error', 'Received an error from Leadpages servers', [ 'status' => 500 ]);
+        } catch (DatabaseError $e) {
+            return new \WP_Error('lp_wp_error', 'Could not sync pages', [ 'status' => 500 ]);
+        } catch (\Throwable $e) {
+            $this->debug('Error syncing Nova pages: ' . $e->getMessage(), __METHOD__);
+            return new \WP_Error('lp_sync_error', 'Unknown error syncing pages', [ 'status' => 500 ]);
+        }
+
+        return new WP_REST_Response(null, 204);
+    }
+
+    /**
+     * Fetch the published Nova pages in a single call.
+     *
+     * @param Client $client a Nova-authenticated client
+     * @return array list of Nova page objects
+     * @throws HttpException
+     */
+    private function fetch_nova_pages( $client ) {
+        $response = $client->get(
+            $this->config->get('NOVA_APP_URL') . '/api/pages',
+            [
+                'query'   => [ 'published' => 'true' ],
+                'timeout' => 10,
+            ]
+        );
+        $body = json_decode(wp_remote_retrieve_body($response));
+
+        // A 200 whose body is not the expected { pages: [...] } shape (empty/truncated body, JSON
+        // drift, a rate-limited 200) must NOT be treated as "zero published pages" — that would make
+        // reconcile_deleted_nova_pages tombstone every live page. Treat it as an error so the sync
+        // aborts and the stored rows are left untouched.
+        if (! isset($body->pages) || ! is_array($body->pages)) {
+            throw new \RuntimeException('Unexpected /api/pages response shape from Nova');
+        }
+
+        return $body->pages;
+    }
+
+    /**
+     * Disconnect and mark deleted any stored Nova pages that were not returned by the latest sync
+     * (unpublished or deleted upstream), clearing their cache so they stop being served.
+     *
+     * @param string[] $seen_ids the nova_page_ids returned by the latest sync
+     * @return void
+     * @throws DatabaseError
+     */
+    private function reconcile_deleted_nova_pages( $seen_ids ) {
+        $stored = Page::get_nova_pages();
+        foreach ($stored as $page) {
+            if (in_array($page->nova_page_id, $seen_ids, true)) {
+                continue;
+            }
+
+            $this->debug('Marking Nova page ' . $page->nova_page_id . ' as no longer published');
+            if ($page->connected && $page->wp_slug) {
+                Cache::delete($this->page_cache_key($page));
+            }
+            Page::update(
+                $page->uuid,
+                [
+                    'deleted_at'   => gmdate('Y-m-d H:i:s'),
+                    'connected'    => false,
+                    'wp_slug'      => null,
+                    'wp_page_type' => null,
+                ]
+            );
+        }
+    }
+
+    /**
+     * Populate the analytics columns for Nova pages from the org-wide analytics endpoint. This is
+     * best-effort: any failure or missing pageId leaves the columns empty so the UI can hide them.
+     *
+     * NOTE(HP-2528): analytics contract - GET {NOVA_APP_URL}/api/analytics/pages?range=30d ->
+     * { pages: [{ pageId, uniqueVisitors, conversionRate (fraction 0..1), views, ... }] }. Matched
+     * by pageId === nova_page_id. Kept isolated here so the shape can be reconciled if it changes.
+     *
+     * @param Client $client a Nova-authenticated client
+     * @return void
+     */
+    private function sync_nova_analytics( $client ) {
+        try {
+            $response = $client->get(
+                $this->config->get('NOVA_APP_URL') . '/api/analytics/pages',
+                [
+                    'query'   => [ 'range' => '30d' ],
+                    'timeout' => 10,
+                ]
+            );
+            $body = json_decode(wp_remote_retrieve_body($response));
+            $metrics = isset($body->pages) && is_array($body->pages) ? $body->pages : [];
+
+            // The Nova analytics API returns camelCase JSON properties (pageId, uniqueVisitors,
+            // conversionRate) — an external contract we read as-is and cannot rename to snake_case.
+            // phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+            foreach ($metrics as $metric) {
+                if (empty($metric->pageId)) {
+                    continue;
+                }
+
+                $data = [];
+                if (isset($metric->uniqueVisitors)) {
+                    $data['visitors'] = (int) $metric->uniqueVisitors;
+                }
+                if (isset($metric->conversionRate)) {
+                    // The Nova API returns conversionRate as a fraction (0..1). The conversion_rate
+                    // column stores that fraction as-is; the frontend's formatPercentage() multiplies
+                    // by 100 for display (matching the Classic column), so we must NOT pre-multiply.
+                    $data['conversion_rate'] = (float) $metric->conversionRate;
+                }
+                if (isset($metric->views)) {
+                    $data['views'] = (int) $metric->views;
+                }
+
+                if ($data) {
+                    // Cast to string so Page::update always matches on the `uuid` column (which for
+                    // Nova rows equals nova_page_id). If pageId ever arrived as a JSON number,
+                    // is_int() would route the match to the integer primary key and write analytics
+                    // onto an unrelated row (possibly a Classic page).
+                    Page::update((string) $metric->pageId, $data);
+                }
+            }
+            // phpcs:enable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+        } catch (\Throwable $e) {
+            // Analytics are non-essential; degrade gracefully so a sync still succeeds without them.
+            $this->debug('Nova analytics unavailable, skipping: ' . $e->getMessage(), __METHOD__);
+        }
     }
 
     /**
@@ -560,7 +848,7 @@ class Controller extends \WP_REST_Controller {
         }
 
         if ($item->wp_slug) {
-            Cache::delete(Cache::page_key($item->wp_slug));
+            Cache::delete($this->page_cache_key($item));
         }
 
         return new WP_REST_Response(null, 204);

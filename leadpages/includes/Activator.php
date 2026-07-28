@@ -37,6 +37,10 @@ class Activator {
     public function deactivate() {
         Options::delete(Options::$refresh_token);
         Options::delete(Options::$access_token);
+        Options::delete(Options::$nova_refresh_token);
+        Options::delete(Options::$nova_access_token);
+        Options::delete(Options::$nova_code_verifier);
+        Options::delete(Options::$nova_oauth_state);
     }
 
     /**

@@ -3,42 +3,146 @@
 /* Layout styles */
 .login-root {
     display: flex;
-    gap: 20px;
+    gap: 0;
+    align-items: stretch;
+    min-height: calc(100vh - 32px);
 }
 
 .left-container {
-    min-width: 45%;
+    flex: 0 0 45%;
+    min-width: 0;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     text-align: center;
     gap: 24px;
-    margin-top: 20vh;
+    padding: 40px;
 }
 
 .right-container {
-    min-width: 55%;
+    flex: 0 0 55%;
+    min-width: 0;
+    box-sizing: border-box;
     display: flex;
     position: relative;
-    justify-content: center;
-    align-items: center;
+    align-items: stretch;
 }
 
-.right-container img {
-    max-width: 100%;
-    max-height: 90vh;
+.left-container img {
+    width: 220px;
+    height: auto;
+    margin-bottom: 4px;
+}
+
+/* Both connect buttons share one width so they read as an equal pair. */
+.left-container .marketing-button {
+    width: 260px;
+}
+
+/* Desktop (side-by-side): the promo panel is a full-bleed, square-cornered
+ * split that fills the right column top-to-bottom. On narrow screens the
+ * media query below restores a rounded, centered card. */
+.login-promo-panel {
+    width: 100%;
+    max-width: none;
+    min-height: 100%;
+    box-sizing: border-box;
+    border-radius: 0;
+    padding: 48px 44px;
+    /* Layered background: brand-mark watermark SVG (top) over a soft highlight and
+     * the brand gradient. The SVG is a lightweight vector, so it stays crisp at any
+     * size; swap it for a product/hero image here if design provides one. */
+    background:
+        url("../../../public/login-panel-bg.svg") no-repeat center / cover,
+        radial-gradient(circle at 28% 18%, rgba(255, 255, 255, 0.18), transparent 55%),
+        linear-gradient(135deg, #6245f2 0%, #8b6cf6 100%);
+    overflow: hidden;
+    color: #ffffff;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    box-shadow: 0 12px 40px rgba(98, 69, 242, 0.25);
+}
+
+.promo-headline {
+    font-family: Value Serif;
+    font-size: 28px;
+    line-height: 1.25;
+    margin: 0;
+    color: #ffffff;
+}
+
+.promo-subtext {
+    font-family: Apercu Pro;
+    font-size: 16px;
+    line-height: 1.5;
+    margin: 0;
+    opacity: 0.92;
+}
+
+.promo-benefits {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    width: 100%;
+    max-width: 380px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.promo-benefits li {
+    position: relative;
+    padding-left: 32px;
+    font-family: Apercu Pro;
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+.promo-benefits li::before {
+    content: "\2713";
+    position: absolute;
+    left: 0;
+    top: 1px;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--lp-purple);
+    background: #ffffff;
+    border-radius: 50%;
 }
 
 @media screen and (max-width: 768px) {
     .login-root {
         flex-wrap: wrap;
         justify-content: center;
+        min-height: auto;
     }
 
     .left-container,
     .right-container {
-        max-width: 50%;
-        margin-top: 20px !important;
+        min-width: 100%;
+        margin-top: 20px;
+    }
+
+    .left-container {
+        padding: 20px;
+    }
+
+    .login-promo-panel {
+        max-width: 560px;
+        min-height: auto;
+        border-radius: 16px;
+        margin: 0 auto 20px;
     }
 }
 
@@ -50,10 +154,16 @@
 }
 
 /* Button styles */
-.sign-up-button {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+.login-promo-panel .sign-up-button {
+    background-color: #ffffff;
+    color: var(--lp-purple);
+    border: none;
+}
+
+.login-promo-panel .sign-up-button:hover,
+.login-promo-panel .sign-up-button:focus {
+    background-color: #f0f0f1;
+    color: var(--lp-purple-hover);
 }
 
 .alert {

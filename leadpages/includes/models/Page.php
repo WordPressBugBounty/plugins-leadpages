@@ -39,6 +39,12 @@ class Page extends ModelBase {
      *   - connected        - whether or not the landing page is being served through WordPress
      *   - wp_page_type     - identifies how the page should be served in WordPress (not currently in use)
      *   - wp_slug          - slug the page is connected under in WordPress
+     *   - platform         - which Leadpages backend the row belongs to ('classic' | 'nova'). Defaults to
+     *                        'classic' so pre-existing rows are unaffected.
+     *   - nova_page_id     - the Nova page identifier (a nanoid string). Null for classic rows. Stored
+     *                        separately from the integer primary key which it must not overload.
+     *   - site_id          - the Nova site the page belongs to, if any. Null for classic rows.
+     *   - published_at     - the time the page was published on the Nova platform. Null for classic rows.
      *
      * @return void
      * @throws Exception
@@ -69,9 +75,14 @@ class Page extends ModelBase {
                 connected BOOLEAN DEFAULT FALSE not null,
                 wp_page_type VARCHAR(10) UNIQUE null,
                 wp_slug VARCHAR(100) UNIQUE null,
+                platform VARCHAR(20) DEFAULT 'classic' NOT null,
+                nova_page_id VARCHAR(100) null,
+                site_id VARCHAR(100) null,
+                published_at DATETIME null,
                 PRIMARY KEY  (id),
                 INDEX uuid_idx (uuid),
-                INDEX wp_slug_idx (wp_slug)
+                INDEX wp_slug_idx (wp_slug),
+                INDEX nova_page_id_idx (nova_page_id)
             ) {$wpdb->get_charset_collate()};
         ";
 
@@ -85,6 +96,45 @@ class Page extends ModelBase {
         $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->prefix . self::table_name));
         if (! $exists) {
             throw new \Exception('Could not create table: ' . esc_html(self::table_name));
+        }
+    }
+
+    /**
+     * Add the Nova (new Leadpages) columns to the page table for installs created before these
+     * columns existed. This is idempotent: each column and index is only added when missing, so it
+     * is safe to run on a fresh install (where create_table() already added them) or on an upgrade.
+     *
+     * @return void
+     * @throws DatabaseError
+     */
+    public static function add_nova_columns() {
+        global $wpdb;
+        $table = $wpdb->prefix . self::table_name;
+
+        $columns = [
+            'platform'     => "ADD COLUMN platform VARCHAR(20) DEFAULT 'classic' NOT NULL",
+            'nova_page_id' => 'ADD COLUMN nova_page_id VARCHAR(100) NULL',
+            'site_id'      => 'ADD COLUMN site_id VARCHAR(100) NULL',
+            'published_at' => 'ADD COLUMN published_at DATETIME NULL',
+        ];
+
+        foreach ($columns as $column => $definition) {
+            // Table/column names here are controlled constants, never user input.
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+            $column_exists = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM `$table` LIKE %s", $column));
+            if (! $column_exists) {
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+                $wpdb->query("ALTER TABLE `$table` $definition");
+                self::throw_on_db_error();
+            }
+        }
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+        $index_exists = $wpdb->get_var($wpdb->prepare("SHOW INDEX FROM `$table` WHERE Key_name = %s", 'nova_page_id_idx'));
+        if (! $index_exists) {
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+            $wpdb->query("ALTER TABLE `$table` ADD INDEX nova_page_id_idx (nova_page_id)");
+            self::throw_on_db_error();
         }
     }
 
@@ -122,20 +172,64 @@ class Page extends ModelBase {
     }
 
     /**
-     * Create a new entry in the database for a raw landing page from a foundry request
+     * Prepare raw landing page data from a Nova (new Leadpages) request for the database.
      *
-     * @param object $data should be raw landing page data from foundry
+     * Nova exposes pages through {NOVA_APP_URL}/api/pages with the shape
+     * { id, slug, title, url, siteId, publishedAt, createdAt, updatedAt }. The Nova page id is a
+     * nanoid string; it is stored in the dedicated nova_page_id column (and reused as the uuid sync
+     * key) rather than overloading the integer primary key. Because the Nova list endpoint only
+     * returns published pages, current_edition is marked non-null so the row surfaces in get_many().
+     *
+     * @param object $data should be a Nova page object from {NOVA_APP_URL}/api/pages
+     * @return array
+     */
+    private static function prepare_nova_data( $data ) {
+        // phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+        return [
+            'uuid'            => $data->id,
+            'name'            => $data->title,
+            'published_url'   => isset($data->url) ? $data->url : null,
+            'lp_slug'         => $data->slug,
+            'kind'            => 'NovaPage',
+            'current_edition' => $data->id,
+            'platform'        => 'nova',
+            'nova_page_id'    => $data->id,
+            'site_id'         => isset($data->siteId) ? $data->siteId : null,
+            'published_at'    => isset($data->publishedAt) ? $data->publishedAt : null,
+            'updated_at'      => isset($data->updatedAt) ? $data->updatedAt : null,
+            // "LAST MODIFIED" column reads last_published (shared with Classic).
+            // Populate it for Nova rows so the table shows a real date instead of
+            // "Invalid Date": prefer updatedAt, fall back to publishedAt.
+            'last_published'  => isset($data->updatedAt)
+                ? $data->updatedAt
+                : (isset($data->publishedAt) ? $data->publishedAt : null),
+            // A page returned by the sync is live, so clear any previous deletion marker.
+            'deleted_at'      => null,
+        ];
+        // phpcs:enable
+    }
+
+    /**
+     * Create a new entry in the database for a raw landing page.
+     *
+     * @param object $data raw landing page data from foundry (classic) or Nova
+     * @param string $platform 'classic' | 'nova' - selects how the raw data is prepared
      * @return int the number of rows inserted
      * @throws DatabaseError
      */
-    public static function create( $data ) {
+    public static function create( $data, $platform = 'classic' ) {
         global $wpdb;
 
-        $data = self::prepare_foundry_data($data);
+        $data = 'nova' === $platform ? self::prepare_nova_data($data) : self::prepare_foundry_data($data);
 
+        // Explicit all-%s format. WordPress's default $wpdb->field_types maps the
+        // reserved column name `site_id` (a core multisite column) to %d, which
+        // would intval() our string Nova site ids to 0. Every column in this table
+        // round-trips safely as a string, so %s across the board is correct.
         $wpdb->insert(
             $wpdb->prefix . self::table_name,
-            $data
+            $data,
+            array_fill(0, count($data), '%s')
         );
 
         self::throw_on_db_error();
@@ -150,25 +244,30 @@ class Page extends ModelBase {
      * the values will be treated as an array of values to update.
      *
      * @param string|int $identifier can be int (id) or string (uuid)
-     * @param array|object $data can be an array of values to update or raw landing page data from foundry
+     * @param array|object $data can be an array of values to update or raw landing page data
+     * @param string $platform 'classic' | 'nova' - selects how raw object data is prepared
      * @return false|int number of rows updated or false when no rows were updated
      * @throws DatabaseError
      */
-    public static function update( $identifier, $data ) {
+    public static function update( $identifier, $data, $platform = 'classic' ) {
         global $wpdb;
 
-        // If data is an object it must be a raw landing page data from foundry request
+        // If data is an object it must be raw landing page data from a foundry or Nova request
         if (is_object($data)) {
-            $data = self::prepare_foundry_data($data);
+            $data = 'nova' === $platform ? self::prepare_nova_data($data) : self::prepare_foundry_data($data);
         }
 
         // Determine the identifier type (ID or UUID)
         $identifier_type = is_int($identifier) ? 'id' : 'uuid';
 
+        // Explicit all-%s format — see create(): WP's field_types coerces the
+        // reserved `site_id` name to %d, corrupting string Nova site ids.
         $result = $wpdb->update(
             $wpdb->prefix . self::table_name,
             $data,
-            [ $identifier_type => $identifier ]
+            [ $identifier_type => $identifier ],
+            array_fill(0, count($data), '%s'),
+            [ '%s' ]
         );
 
         self::throw_on_db_error();
@@ -278,6 +377,25 @@ class Page extends ModelBase {
         self::throw_on_db_error();
 
         return [ $results, $total_count ];
+    }
+
+    /**
+     * Retrieve all Nova landing pages that have not been marked deleted. Used to reconcile
+     * deletions by diffing the stored Nova rows against the ids returned from a Nova sync.
+     *
+     * @return array
+     * @throws DatabaseError
+     */
+    public static function get_nova_pages() {
+        global $wpdb;
+
+        $results = $wpdb->get_results(
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+            'SELECT * FROM ' . $wpdb->prefix . self::table_name . " WHERE platform = 'nova' AND deleted_at IS NULL"
+        );
+
+        self::throw_on_db_error();
+        return $results;
     }
 
     /**

@@ -27,6 +27,24 @@ class Options {
     public static $refresh_token = LEADPAGES_OPT_PREFIX . '_refresh_token';
     public static $access_token = LEADPAGES_OPT_PREFIX . '_access_token';
 
+    // Which Leadpages backend this install is connected to ('classic' | 'nova').
+    public static $platform = LEADPAGES_OPT_PREFIX . '_platform';
+
+    // The Nova (new Leadpages) organization the connected account is scoped to.
+    public static $nova_org_id = LEADPAGES_OPT_PREFIX . '_nova_org_id';
+
+    // The code_verifier and state used during the Nova OAuth 2.0 authorization code (PKCE) flow.
+    public static $nova_code_verifier = LEADPAGES_OPT_PREFIX . '_nova_code_verifier';
+    public static $nova_oauth_state = LEADPAGES_OPT_PREFIX . '_nova_oauth_state';
+
+    // The refresh and access tokens for the Nova (new Leadpages) OAuth 2.0 flow. The existence of
+    // these tokens is how we determine the users Nova authenticated status.
+    public static $nova_refresh_token = LEADPAGES_OPT_PREFIX . '_nova_refresh_token';
+    public static $nova_access_token = LEADPAGES_OPT_PREFIX . '_nova_access_token';
+
+    // The Nova pop-up selected to be embedded site-wide, if any.
+    public static $nova_popup_id = LEADPAGES_OPT_PREFIX . '_nova_popup_id';
+
     /*
      * Get and return an option with the given name
      *
@@ -68,5 +86,12 @@ class Options {
         self::delete(self::$db_version);
         self::delete(self::$refresh_token);
         self::delete(self::$access_token);
+        self::delete(self::$platform);
+        self::delete(self::$nova_org_id);
+        self::delete(self::$nova_code_verifier);
+        self::delete(self::$nova_oauth_state);
+        self::delete(self::$nova_refresh_token);
+        self::delete(self::$nova_access_token);
+        self::delete(self::$nova_popup_id);
     }
 }

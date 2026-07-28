@@ -6,8 +6,7 @@ import apiFetch from '@wordpress/api-fetch';
 import './login.css';
 import { getErrorMessage } from '../../utils/api';
 import { WPResponseError } from '../../types/api';
-import leadpagesLogo from '../../../public/lp-logo-icon-34x24.png';
-import loginPromo from '../../../public/login-promo-1206x1614.png';
+import leadpagesLogo from '../../../public/leadpages-logo.png';
 
 const SIGN_UP_URL =
     'https://www.leadpages.com/pricing?utm_campaign=Trial%20to%20Paid&utm_source=wordpress&utm_medium=wordpress&utm_term=wordpress';
@@ -25,10 +24,12 @@ export interface Props {
 const Login: React.FC<Props> = ({ onLoginSuccess }) => {
     const [error, setError] = useState('');
 
-    const handleLoginClick = async () => {
+    // Start an OAuth connect flow against the given authorize endpoint. Both Classic and the new
+    // Leadpages (Nova) use the same PKCE popup + BroadcastChannel flow; only the endpoint differs.
+    const startConnect = async (authorizePath: string) => {
         try {
             const url = (await apiFetch({
-                path: 'leadpages/v1/oauth2/authorize',
+                path: authorizePath,
             })) as string;
             window.open(url, 'oauth2Popup', 'width=800,height=800');
         } catch (err) {
@@ -36,7 +37,7 @@ const Login: React.FC<Props> = ({ onLoginSuccess }) => {
             return;
         }
 
-        // Await the result of logging in and handle success or error responses
+        // Await the result of connecting and handle success or error responses
         const oauthChannel = new BroadcastChannel(OAUTH_CHANNEL);
         oauthChannel.onmessage = (event: MessageEvent<OAuthChannelData>) => {
             if (event.data.success === true) {
@@ -49,6 +50,10 @@ const Login: React.FC<Props> = ({ onLoginSuccess }) => {
         };
     };
 
+    const handleLoginClick = () => startConnect('leadpages/v1/oauth2/authorize');
+
+    const handleNovaConnectClick = () => startConnect('leadpages/v1/nova/authorize');
+
     const handleSignUp = () => {
         window.open(SIGN_UP_URL, '_blank');
     };
@@ -57,7 +62,7 @@ const Login: React.FC<Props> = ({ onLoginSuccess }) => {
         <div className="login-root">
             <div className="left-container">
                 <img src={leadpagesLogo} alt="Leadpages Logo" />
-                <h1 className="login-title">Log in to Leadpages to start publishing to WordPress</h1>
+                <h1 className="login-title">Connect Leadpages to start publishing to WordPress</h1>
                 {error && (
                     <div className="lp-alert lp-alert-error alert">
                         <div className="lp-alert-icon lp-error-icon rotate-180">{info}</div>
@@ -65,14 +70,28 @@ const Login: React.FC<Props> = ({ onLoginSuccess }) => {
                     </div>
                 )}
                 <Button className="marketing-button contained" onClick={handleLoginClick}>
-                    Log In
+                    Log in to Classic Leadpages
+                </Button>
+                <Button className="marketing-button outlined nova-connect-button" onClick={handleNovaConnectClick}>
+                    Connect the new Leadpages
                 </Button>
             </div>
             <div className="right-container">
-                <img src={loginPromo} alt="Leadpages Promo" className="promo-image" />
-                <Button className="marketing-button outlined sign-up-button" onClick={handleSignUp}>
-                    Sign Up Free
-                </Button>
+                <div className="login-promo-panel">
+                    <h2 className="promo-headline">Turn WordPress visitors into leads</h2>
+                    <p className="promo-subtext">
+                        Build high-converting landing pages in Leadpages and publish them right on your own
+                        WordPress domain.
+                    </p>
+                    <ul className="promo-benefits">
+                        <li>Publish to any URL on your site &mdash; no DNS changes</li>
+                        <li>Edit in Leadpages; updates go live automatically</li>
+                        <li>Conversion-optimized templates + built-in analytics</li>
+                    </ul>
+                    <Button className="marketing-button sign-up-button" onClick={handleSignUp}>
+                        Start for free
+                    </Button>
+                </div>
             </div>
         </div>
     );

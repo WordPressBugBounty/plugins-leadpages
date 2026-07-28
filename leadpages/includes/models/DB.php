@@ -23,6 +23,7 @@ class DB {
      */
     public static $db_versions = [
         '1.0.0',
+        '1.2.0',
         // versions must be ordered from oldest to newest - top to bottom
     ];
 
@@ -104,5 +105,19 @@ class DB {
      */
     private function v1_0_0() {
         Page::create_table();
+    }
+
+    /**
+     * Database version 1.2.0. Add the Nova (new Leadpages) columns to the page table.
+     *
+     * The columns (platform, nova_page_id, site_id, published_at) are additive; existing classic
+     * rows are untouched (platform defaults to 'classic'). This uses an explicit, idempotent
+     * ALTER rather than re-running create_table() through dbDelta so the migration never
+     * re-processes the table's existing inline UNIQUE columns on an already-populated table.
+     *
+     * @returns void
+     */
+    private function v1_2_0() {
+        Page::add_nova_columns();
     }
 }

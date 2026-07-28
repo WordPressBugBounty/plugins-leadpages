@@ -18,6 +18,12 @@
     font-family: Open Sans;
 }
 
+.modal-root img {
+    width: 200px;
+    height: auto;
+    margin-bottom: 4px;
+}
+
 .cta-buttons {
     display: flex;
     align-items: center;

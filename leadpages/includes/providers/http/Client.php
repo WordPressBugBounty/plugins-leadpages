@@ -5,15 +5,13 @@ namespace Leadpages\providers\http;
 defined('ABSPATH') || die('No script kiddies please!'); // Avoid direct file request
 
 use InvalidArgumentException;
-use Leadpages\models\Options;
 use Leadpages\providers\http\exceptions\RequestFailureException;
 use Leadpages\providers\http\exceptions\ServerException;
 use Leadpages\providers\http\exceptions\ClientException;
 use Leadpages\providers\http\exceptions\NotFoundException;
 use Leadpages\providers\http\exceptions\AuthException;
-use Leadpages\providers\http\exceptions\HttpException;
+use Leadpages\providers\http\auth\AuthProvider;
 use Leadpages\providers\Utils;
-use Leadpages\providers\config\Config;
 use WP_Error;
 
 /**
@@ -39,8 +37,8 @@ class Client {
 
     use Utils;
 
-    /** @var Config */
-    private $config;
+    /** @var AuthProvider|null strategy used to authenticate requests and recover from auth failures */
+    private $auth_provider;
 
     /**
      * HTTP methods supported by this client
@@ -51,8 +49,13 @@ class Client {
     /** native ssl cert - only used in local development */
     private $ssl_cert = ABSPATH . WPINC . '/certificates/ca-bundle.crt';
 
-    public function __construct() {
-        $this->config = Config::get_instance();
+    /**
+     * @param AuthProvider|null $auth_provider when provided, the client authenticates every request
+     * with it and delegates 401/403 recovery to it. When null, the client makes unauthenticated
+     * requests and treats a 401/403 as an unrecoverable AuthException.
+     */
+    public function __construct( ?AuthProvider $auth_provider = null ) {
+        $this->auth_provider = $auth_provider;
     }
 
     /**
@@ -128,6 +131,12 @@ class Client {
     private function request( $method, $url, $options = [], $refresh = true ) {
         // Nothing to escape here
         // phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped
+
+        // Authenticate the request through the active provider (if any) before it is sent.
+        if (null !== $this->auth_provider) {
+            $options = $this->auth_provider->applyAuth($options);
+        }
+
         $response = $this->call($method, $url, $options);
         if (is_wp_error($response)) {
             throw new RequestFailureException($response);
@@ -141,27 +150,15 @@ class Client {
             throw new NotFoundException($response);
         }
 
-        // Attempt to auto refresh the access token and retry the request if we get a 401
-        // or 403 response to a request with an Authorization header. If this fails,
-        // we delete the refresh and access tokens from the options table and throw an exception
-        // so the plugin knows the user is no longer logged in.
+        // On an auth failure, let the provider recover (e.g. refresh the access token). If it can,
+        // retry the request once with the refreshed credentials re-applied; otherwise the provider
+        // has cleared the invalid credentials and we surface the failure. Without a provider the
+        // request is unauthenticated and a 401/403 is always unrecoverable.
         if (401 === $status_code || 403 === $status_code) {
-            $is_authed_request = isset($options['headers']['Authorization']);
-            if ($is_authed_request) {
-                if ($refresh) {
-                    $token = $this->refresh_access_token();
-                    if ($token) {
-                        Options::set(Options::$access_token, $token);
-                        $options['headers']['Authorization'] = "Bearer $token";
-                        return $this->request($method, $url, $options, false);
-                    }
-                }
-                Options::delete(Options::$refresh_token);
-                Options::delete(Options::$access_token);
-                throw new AuthException($response);
-            } else {
-                throw new AuthException($response);
+            if (null !== $this->auth_provider && $refresh && $this->auth_provider->handleAuthFailure($response)) {
+                return $this->request($method, $url, $options, false);
             }
+            throw new AuthException($response);
         }
 
         if (400 <= $status_code) {
@@ -170,51 +167,5 @@ class Client {
 
         return $response;
         //phpcs:enable
-    }
-
-    /**
-     * Refreshes the access token using the refresh token saved in the options table.
-     * If this is successful, the new access token will be returned. Otherwise returns null.
-     *
-     * @param bool $retry whether to retry the refresh request on 500 errors
-     * @return string|null
-     */
-    private function refresh_access_token( $retry = true ) {
-        $refresh_token = Options::get(Options::$refresh_token);
-        if (! $refresh_token) {
-            return null;
-        }
-
-        $this->debug("Attempting to refresh access token with refresh token: $refresh_token");
-
-        try {
-            $response = $this->post(
-                $this->config->get('ACCOUNT_API_URL') . 'oauth2/access-tokens',
-                [
-                    'body'    => [
-                        'refresh_token' => $refresh_token,
-                        'client_id'     => $this->config->get('OAUTH2_CLIENT_ID'),
-                        'grant_type'    => 'refresh_token',
-                    ],
-                    'headers' => [
-                        'Content-Type' => 'application/x-www-form-urlencoded',
-                    ],
-                ]
-            );
-            $body = json_decode($response['body'], true);
-
-            $this->debug('Successfully refreshed access token');
-            return $body['access_token'];
-        } catch (ServerException $e) {
-            if ($retry) {
-                $this->debug('Retrying access token refresh request');
-                return $this->refresh_access_token(false);
-            }
-            $this->debug('Failed to refresh access token');
-            return null;
-        } catch (HTTPException $e) {
-            $this->debug('Failed to refresh access token');
-            return null;
-        }
     }
 }

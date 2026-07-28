@@ -10,9 +10,15 @@ use Leadpages\providers\http\exceptions\ServerException;
 use Leadpages\providers\http\exceptions\NotFoundException;
 use Leadpages\models\Page;
 use Leadpages\models\Options;
+use Leadpages\serving\PageSource;
+use Leadpages\serving\ClassicPageSource;
+use Leadpages\serving\NovaPageSource;
 
 /**
  * A class for serving Leadpages assets within the WordPress environment.
+ *
+ * The reverse-proxy mechanics (fetch, render, cache) are shared; the backend-specific behavior for
+ * a connected page comes from a PageSource selected by the row's platform (Classic or Nova).
  */
 class Proxy {
 
@@ -21,15 +27,17 @@ class Proxy {
     /** @var Client */
     private $client;
 
+    /** The serving-tag meta value injected into the current response (set per request in render). */
+    private static $serving_tag = 'wordpress-official';
+
     public function __construct() {
         $this->client = new Client();
     }
 
     /**
-     * Proxy requests to Leadpages landing pages when a page has been connected
-     * for the requested path. Ignores any request methods that are not GET and ignores
-     * any paths not associated with a Leadpages landing page. If the page being served
-     * is a split test, the cookie identifying the split test variation is set.
+     * Proxy requests to connected Leadpages landing pages. Ignores any request methods that are not
+     * GET and any paths not associated with a connected landing page. The page is served through the
+     * PageSource for its platform.
      *
      * "path" and "slug" are used synonymously here and are the same as a WP "permalink"
      *
@@ -48,33 +56,43 @@ class Proxy {
         $current_url = $this->get_current_url();
         $slug = sanitize_title($this->parse_request($current_url));
 
-        $cached_value = Cache::get(Cache::page_key($slug));
+        $page = Page::get_by_slug($slug);
+        if (! $page) {
+            $this->debug("Ignoring request to $current_url");
+            return;
+        }
+
+        $source = $this->source_for($page);
+        $cache_key = $source->cache_key($page);
+
+        $cached_value = Cache::get($cache_key);
         if ($cached_value) {
             $this->debug('Serving page from cache');
-            $this->render_html($cached_value);
+            $this->render_html($cached_value, $source);
         } else {
-            $page = Page::get_by_slug($slug);
-            // do not serve unpublished, unconnected or deleted pages, or pages that are variations of a splittest
-            if (! $page || ! $page->current_edition || ! $page->connected || $page->deleted_at || $page->split_test) {
+            // Do not serve unpublished, deleted, or split-test-variation pages.
+            if (! $page->current_edition || ! $page->connected || $page->deleted_at || $page->split_test) {
                 $this->debug("Ignoring request to $current_url");
                 return;
             }
 
-            $target_url = esc_url_raw($page->published_url, [ 'http', 'https' ]);
-            $this->debug("Proxying $current_url to $target_url");
-            $response = $this->fetch_page_html($target_url);
+            $wp_url = strtok($current_url, '?');
+            $this->debug("Proxying $current_url");
+            $response = $this->fetch_page_html($source, $page, $wp_url);
             if (! $response) {
                 $this->debug('Something went wrong, aborting proxy');
                 return;
             }
 
-            $this->render_html($response);
+            $this->render_html($response, $source);
 
-            // Cache the page only if it is not a split test. Split tests need to
-            // be fetched each time so that our system can generate the HTML based
-            // on the split test cookie.
-            if ('LeadpageSplitTestV2' !== $page->kind) {
-                Cache::set(Cache::page_key($slug), $response);
+            // Never cache a response that carries Set-Cookie: the cached copy would replay that
+            // same cookie value to every visitor served from cache (a shared-identity vector).
+            // Per-visitor experiment/personalization responses are already no-store (ttl null);
+            // this also covers a cacheable page that happens to set a first-party cookie.
+            $ttl = $source->cache_ttl($page, $response);
+            if (null !== $ttl && empty(wp_remote_retrieve_cookies($response))) {
+                Cache::set($cache_key, $response, $ttl);
             }
         }
 
@@ -83,6 +101,19 @@ class Proxy {
         $this->debug("Successful served page in $time_taken ms");
 
         $this->lp_exit(0);
+    }
+
+    /**
+     * Select the serving strategy for a page based on its platform.
+     *
+     * @param object $page
+     * @return PageSource
+     */
+    private function source_for( $page ) {
+        if (isset($page->platform) && 'nova' === $page->platform) {
+            return new NovaPageSource();
+        }
+        return new ClassicPageSource();
     }
 
     /**
@@ -131,36 +162,28 @@ class Proxy {
     }
 
     /**
-     * Get the page content for a provided url. Leadpages "variation" cookies will automatically be forwarded
-     * with the request.
+     * Fetch the upstream page HTML through the given source. Retries once on server errors. Returns
+     * the response to render, or null to decline serving (letting WordPress handle the request).
      *
-     * @param string $url
-     * @param bool $retry whether or not to retry the request on server errors
-     * @return \WP_HTTP_Response|null response object or null if the 500 and 400 errors (other than 404)
+     * @param PageSource $source
+     * @param object $page
+     * @param string $wp_url the public WordPress URL being served
+     * @param bool $retry whether to retry the request on server errors
+     * @return array|null response object or null
      */
-    private function fetch_page_html( $url, $retry = true ) {
-        $url = esc_url_raw($url);
-
-        $options = [ 'timeout' => 10 ];
-
-        // Transfer potential split test cookies from incoming request to proxied request.
-        // Only process the "variation" cookie if it exists.
-        if (isset($_COOKIE['variation'])) {
-            $variation_cookie = $_COOKIE['variation'];
-            $cookie = new \WP_Http_Cookie('variation');
-            $cookie->name = 'variation';
-            $cookie->value = $variation_cookie;
-            $options['cookies'] = [ $cookie ];
-        }
+    private function fetch_page_html( $source, $page, $wp_url, $retry = true ) {
+        $url = $source->build_url($page, $wp_url);
+        $options = $source->build_request_options();
 
         try {
             $response = $this->client->get($url, $options);
         } catch (NotFoundException $e) {
-            $response = $e->response;
+            // Classic serves the Leadpages 404 page; Nova declines so it never echoes an error page.
+            $response = $source->serves_not_found() ? $e->response : null;
         } catch (ServerException $e) {
             $status_code = wp_remote_retrieve_response_code($e->response);
             if ($status_code >= 500 && $retry) {
-                $response = $this->fetch_page_html($url, false);
+                $response = $this->fetch_page_html($source, $page, $wp_url, false);
             } else {
                 $response = null;
             }
@@ -172,28 +195,40 @@ class Proxy {
     }
 
     /**
-     * Render HTML from an HTTP response object to the page with the same status
-     * code and variation cookie (if set) as the provided response.
+     * Render HTML from an HTTP response object to the page with the same status code as the response
+     * and mirror the source's cookies back to the visitor.
      *
-     * @param \WP_HTTP_Response $response
+     * @param array $response
+     * @param PageSource $source
      */
-    public function render_html( $response ) {
+    public function render_html( $response, $source ) {
         if (ob_get_length() > 0) {
             ob_clean();
         }
 
         $html = $response['body'];
         $status = wp_remote_retrieve_response_code($response);
-        $split_test_cookie = wp_remote_retrieve_cookie($response, 'variation');
 
         status_header($status);
-        if ($split_test_cookie) {
+        foreach ($source->cookies_to_mirror($response) as $cookie) {
+            // Mirror on the WordPress host with a site-wide path so per-visitor experiment /
+            // personalization cookies are sent on every page (not just the proxied slug's
+            // directory, which is what a bare setcookie() would default to). Mark Secure on
+            // HTTPS and SameSite=Lax. HttpOnly is intentionally NOT forced: Nova's client-side
+            // scripts read experiment cookies (e.g. _hp_exp_*) from document.cookie.
             setcookie(
-                $split_test_cookie->name,
-                $split_test_cookie->value,
-                $split_test_cookie->expires ?? 0
+                $cookie->name,
+                $cookie->value,
+                [
+                    'expires'  => $cookie->expires ?? 0,
+                    'path'     => '/',
+                    'secure'   => is_ssl(),
+                    'samesite' => 'Lax',
+                ]
             );
         }
+
+        self::$serving_tag = $source->serving_tag();
 
         ob_start([ get_called_class(), 'preprocess_html' ]);
         // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
@@ -209,7 +244,9 @@ class Proxy {
     }
 
     private static function get_current_url() {
-        return esc_url_raw(( is_ssl() ? 'https://' : 'http://' ) . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']);
+        $host = isset($_SERVER['HTTP_HOST']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_HOST'])) : '';
+        $uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
+        return esc_url_raw(( is_ssl() ? 'https://' : 'http://' ) . $host . $uri);
     }
 
     /**
@@ -226,14 +263,14 @@ class Proxy {
 
     /**
      * Output buffering callback to add a "leadpages-serving-tags" meta tag for analytics. This
-     * helps us differentiate WordPress traffic in our system.
+     * helps us differentiate WordPress traffic (and Classic vs Nova) in our system.
      *
      * @param string $content html
      * @return string
      */
     public static function modify_serving_tags( $content ) {
         $search = '</head>';
-        $replace = '<meta name="leadpages-serving-tags" content="wordpress-official"></head>';
+        $replace = '<meta name="leadpages-serving-tags" content="' . self::$serving_tag . '"></head>';
         return str_replace($search, $replace, $content);
     }
 

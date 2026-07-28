@@ -145,6 +145,12 @@ class Schema {
                 'validate_callback' => 'rest_validate_request_arg',
                 'required'          => true,
             ],
+            'replace'   => [
+                'description'       => 'Replace the landing page currently published at this slug (used for cross-platform migration hand-off).',
+                'type'              => 'boolean',
+                'default'           => false,
+                'validate_callback' => 'rest_validate_request_arg',
+            ],
         ];
     }
 }

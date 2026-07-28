@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Button } from '@wordpress/components';
-import leadpagesWordmark from '../../../public/lp-wordmark-251x42.png';
+import leadpagesWordmark from '../../../public/leadpages-logo.png';
 import './sign_out_modal.css';
 import apiFetch from '@wordpress/api-fetch';
 
@@ -16,7 +16,12 @@ const SignOut: React.FC<SignOutConfirmationProps> = ({ onClose }) => {
 
     const handleSignOut = async () => {
         try {
-            await apiFetch({ path: '/leadpages/v1/oauth2/sign-out', method: 'GET' });
+            // Clear whichever platform is connected. Each endpoint is a no-op when its credentials
+            // are absent, so signing out works for both Classic and the new Leadpages (Nova).
+            await Promise.all([
+                apiFetch({ path: '/leadpages/v1/oauth2/sign-out', method: 'GET' }),
+                apiFetch({ path: '/leadpages/v1/nova/disconnect', method: 'DELETE' }),
+            ]);
             window.location.replace(basePath + SLUG_LEADPAGES);
         } catch (e) {
             // eslint-disable-next-line no-console

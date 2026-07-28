@@ -14,15 +14,24 @@
 }
 
 /* add the leadpages "lp-symbol" icon as the top level menu icon for the plugin */
+/* Monochrome, WP-native menu icon: mask the brand mark and paint it with
+ * currentColor so it inherits WordPress's adaptive menu-icon color (light grey,
+ * white on hover/current) and matches the core menu items. */
 #toplevel_page_leadpages .wp-menu-image::before {
-    content: "\e60b";
-    direction: ltr;
-    display: inline-block;
-    font: normal 1.25rem/1.4 "lp-icons";
-    padding-top: 3px;
-    text-transform: none;
-    letter-spacing: normal;
-    vertical-align: middle;
-    white-space: nowrap;
-    word-wrap: normal;
+    content: "";
+    display: block;
+    box-sizing: content-box;
+    width: 100%;
+    height: 18px;
+    padding: 8px 0;
+    margin: 0;
+    background-color: currentColor;
+    -webkit-mask-image: url("leadpages-menu-icon.png");
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    -webkit-mask-size: 18px 18px;
+    mask-image: url("leadpages-menu-icon.png");
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: 18px 18px;
 }

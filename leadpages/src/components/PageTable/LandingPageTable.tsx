@@ -3,7 +3,7 @@ import { escapeHTML } from '@wordpress/escape-html';
 import Caret from '../Caret';
 import Pagination from '../Pagination';
 import { handleSortChange } from '../../utils/sorting';
-import { BUILDER_URL, LEADPAGES_URL, HOME_URL } from '../../utils/config';
+import { BUILDER_URL, LEADPAGES_URL, HOME_URL, NOVA_DASHBOARD_URL } from '../../utils/config';
 import { formatDate, formatNumber, formatPercentage } from '../../utils/formatting';
 import { OrderBy, Direction } from '../../types/table';
 import { MetaData, LandingPage } from '../../types/api';
@@ -52,9 +52,13 @@ const getActionItem = (
     let className = '';
     let handler = () => {};
     const isSplitTest = page.kind === 'LeadpageSplitTestV2';
-    const editLPBuilderUrl = isSplitTest
-        ? `${LEADPAGES_URL}#/split-test-analytics/${page.uuid}`
-        : `${BUILDER_URL}#/edit/${page.uuid}`;
+    // Nova pages are edited in the new Leadpages editor at /edit/{pageId}, not the Classic builder.
+    const editLPBuilderUrl =
+        page.platform === 'nova'
+            ? `${NOVA_DASHBOARD_URL}/edit/${page.nova_page_id || page.uuid}`
+            : isSplitTest
+              ? `${LEADPAGES_URL}#/split-test-analytics/${page.uuid}`
+              : `${BUILDER_URL}#/edit/${page.uuid}`;
 
     switch (action) {
         case actionItemLabel.EDIT_PAGE:
@@ -100,11 +104,19 @@ const getActionItem = (
     return { label, url, className, type, handler };
 };
 
+// escapeHTML() throws on null/undefined (it calls value.replace). Nova rows can
+// have null text fields (e.g. an untitled page), so coerce to a string first.
+const safeText = (value: unknown): string => escapeHTML(value == null ? '' : String(value));
+
 const generateColumnURL = (column: keyof LandingPage, page: LandingPage): string => {
     const isSplitTest = page.kind === 'LeadpageSplitTestV2';
-    const pageAnalyticsUrl = isSplitTest
-        ? `${LEADPAGES_URL}#/split-test-analytics/${page.uuid}`
-        : `${LEADPAGES_URL}#/pages/${page.uuid}/analytics/`;
+    // Nova pages link to the new Leadpages dashboard for analytics.
+    const pageAnalyticsUrl =
+        page.platform === 'nova'
+            ? NOVA_DASHBOARD_URL
+            : isSplitTest
+              ? `${LEADPAGES_URL}#/split-test-analytics/${page.uuid}`
+              : `${LEADPAGES_URL}#/pages/${page.uuid}/analytics/`;
 
     switch (column) {
         case 'wp_slug':
@@ -166,7 +178,7 @@ const LandingPageTable: React.FC<Props> = ({
             case 'name':
                 return (
                     <>
-                        <div className="page-name">{escapeHTML(page[column])}</div>
+                        <div className="page-name">{safeText(page[column])}</div>
                         <div className="actions">{generateActionItems(actions, page, onAction)}</div>
                     </>
                 );
@@ -205,11 +217,11 @@ const LandingPageTable: React.FC<Props> = ({
                         target="_blank"
                         rel="noreferrer"
                     >
-                        <div className="page-wp_slug">/{escapeHTML(page[column])}</div>
+                        <div className="page-wp_slug">/{safeText(page[column])}</div>
                     </a>
                 );
             default:
-                return escapeHTML(page[column] as string);
+                return safeText(page[column]);
         }
     };
 

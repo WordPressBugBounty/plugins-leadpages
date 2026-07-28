@@ -25,13 +25,31 @@ class Cache {
     private static $page_key_prefix = LEADPAGES_OPT_PREFIX . '_page_';
 
     /*
-     * Build the cache key given the slug of the page.
+     * Build the cache key for a page.
+     *
+     * Classic rows are keyed by slug alone (unchanged). Nova rows additionally include the platform
+     * and nova_page_id so that re-binding a slug from one Nova page to another (or across platforms)
+     * cannot serve a stale cached response.
      *
      * @param string $slug
+     * @param string $platform 'classic' | 'nova'
+     * @param string|null $nova_page_id
      * @return string
      */
-    public static function page_key( $slug ) {
+    public static function page_key( $slug, $platform = 'classic', $nova_page_id = null ) {
+        if ('nova' === $platform && $nova_page_id) {
+            return self::$page_key_prefix . 'nova_' . $nova_page_id . '_' . $slug;
+        }
         return self::$page_key_prefix . $slug;
+    }
+
+    /*
+     * The default maximum time (seconds) a value is cached for.
+     *
+     * @return int
+     */
+    public static function default_ttl() {
+        return self::$max_time;
     }
 
     /*
@@ -42,10 +60,11 @@ class Cache {
      *
      * @param string $name
      * @param mixed $value
+     * @param int|null $ttl seconds to cache for; defaults to the maximum cache time
      * @return boolean
      */
-    public static function set( $name, $value ) {
-        return set_transient($name, $value, self::$max_time);
+    public static function set( $name, $value, $ttl = null ) {
+        return set_transient($name, $value, null === $ttl ? self::$max_time : $ttl);
     }
 
     /*

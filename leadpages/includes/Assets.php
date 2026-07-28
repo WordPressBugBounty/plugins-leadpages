@@ -191,9 +191,10 @@ class Assets {
             $this->file_paths[ ASSET_LANDINGPAGES ]['name'],
             LEADPAGES_NS . 'Data',
             [
-                'homeUrl'      => home_url(),
-                'leadpagesUrl' => $this->config->get('LEADPAGES_URL'),
-                'builderUrl'   => $this->config->get('BUILDER_URL'),
+                'homeUrl'          => home_url(),
+                'leadpagesUrl'     => $this->config->get('LEADPAGES_URL'),
+                'builderUrl'       => $this->config->get('BUILDER_URL'),
+                'novaDashboardUrl' => $this->config->get('NOVA_DASHBOARD_URL'),
             ]
         );
 
@@ -243,11 +244,15 @@ class Assets {
      * Enqueue the Leadpages icons. The LP icon in the top level menu item is dependent on this.
      */
     private function enqueue_leadpages_icons() {
+        // Version by file mtime so edits to this static stylesheet always bust the
+        // browser cache (the plugin version alone would not change between edits).
+        $icons_css = LEADPAGES_PATH . '/public/lp-icons.css';
+        $version = file_exists($icons_css) ? filemtime($icons_css) : LEADPAGES_VERSION;
         wp_enqueue_style(
             'leadpages-icons',
             plugins_url('public/lp-icons.css', LEADPAGES_FILE),
             [],
-            LEADPAGES_VERSION
+            $version
         );
     }
 }

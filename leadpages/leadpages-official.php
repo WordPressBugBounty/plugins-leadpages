@@ -4,7 +4,7 @@
  * Plugin Name:       Leadpages
  * Plugin URI:        https://leadpages.com/integrations/wordpress
  * Description:       Easily publish your Leadpages landing pages to your WordPress site. Promote your lead magnets, events, promotions, and more.
- * Version:           1.1.4
+ * Version:           1.2.0
  * Author:            Leadpages
  * Author URI:        https://leadpages.com
  * Requires at least: 6.0
@@ -29,7 +29,7 @@ define('LEADPAGES_MIN_WP', '6.0.0');
 define('LEADPAGES_NS', 'leadpages');
 define('LEADPAGES_DB_PREFIX', 'lp'); // The table name prefix wp_{prefix}
 define('LEADPAGES_OPT_PREFIX', 'lp'); // The option name prefix in wp_options
-define('LEADPAGES_VERSION', '1.1.4');
+define('LEADPAGES_VERSION', '1.2.0');
 
 require_once LEADPAGES_PATH . '/vendor/autoload.php';
 

@@ -50,4 +50,16 @@ trait Utils {
     public function is_user_logged_into_plugin() {
         return !empty(Options::get(Options::$refresh_token)) && !empty(Options::get(Options::$access_token));
     }
+
+    /**
+     * Is the user connected to the plugin through either the Classic or the new Leadpages (Nova)
+     * OAuth flow. Used to gate UI that applies to whichever platform is connected.
+     * @return bool
+     */
+    public function is_connected_to_plugin() {
+        if ($this->is_user_logged_into_plugin()) {
+            return true;
+        }
+        return !empty(Options::get(Options::$nova_refresh_token)) && !empty(Options::get(Options::$nova_access_token));
+    }
 }

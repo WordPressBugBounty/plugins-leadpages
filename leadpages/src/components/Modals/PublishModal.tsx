@@ -22,9 +22,12 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
     const [loading, setLoading] = useState(false);
     const [cacheClearSuccess, setCacheClearSuccess] = useState(false);
     const [notice, setNotice] = useState<{ show: boolean; messages: string[] }>({ show: false, messages: [] });
+    const [replaceConflict, setReplaceConflict] = useState<string | null>(null);
 
     const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSlug(e.target.value);
+        // The conflict is specific to a slug, so a new slug clears any pending replace prompt.
+        setReplaceConflict(null);
     };
 
     const handleDismissNotice = () => {
@@ -38,7 +41,7 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
         }));
     };
 
-    const handlePublish = async () => {
+    const handlePublish = async (replace = false) => {
         if (!page) return;
         setLoading(true);
 
@@ -50,12 +53,20 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
                     slug,
                     published: true, // this only manages published pages
                     pageType: null, // we don't support specific page types yet
+                    replace, // replace a page from either platform already at this slug
                 },
             });
             onPublish();
             onClose();
         } catch (e) {
-            handleFetchError(e as WPResponseError);
+            const error = e as WPResponseError;
+            // A landing page (possibly on the other platform) already holds this slug. Offer to
+            // hand the slug off rather than failing, preserving the same URL.
+            if (error.code === 'slug_taken_by_page') {
+                setReplaceConflict(error.message);
+            } else {
+                handleFetchError(error);
+            }
         } finally {
             setLoading(false);
         }
@@ -126,12 +137,20 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
                     </div>
                 </>
             )}
+            {replaceConflict && (
+                <div className="modal-section modal-replace-conflict">
+                    <p className="modal-grey">{replaceConflict}</p>
+                    <Button variant="secondary" disabled={loading} onClick={() => handlePublish(true)}>
+                        {loading ? 'Loading...' : `Replace the page at /${slug}`}
+                    </Button>
+                </div>
+            )}
             {/* Add a little extra padding to the publish modal only. We can remove this when we add page types. */}
             <div className={variant === 'publish' ? 'modal-actions modal-action-padding' : 'modal-actions'}>
                 <Button variant="tertiary" onClick={onClose}>
                     Cancel
                 </Button>
-                <Button variant="primary" disabled={!slug || loading} onClick={handlePublish}>
+                <Button variant="primary" disabled={!slug || loading} onClick={() => handlePublish()}>
                     {loading ? 'Loading...' : buttonText}
                 </Button>
             </div>

@@ -10,10 +10,10 @@
 */
 
 :root {
-    /* Button Colors */
+    /* Button Colors — current Leadpages (Nova) brand accent (#6245F2) */
     --main-blue-color: #3858e9;
-    --lp-purple: #603eff;
-    --lp-purple-hover: #4d32cc;
+    --lp-purple: #6245f2;
+    --lp-purple-hover: #4f37cc;
     --contrast-text: #ffffff;
     --focus: #f0f0f1;
     --hover: #cccccc;
@@ -54,7 +54,9 @@
 
 .contained:hover,
 .contained:focus {
-    color: var(--contrast-text);
+    /* !important so the WordPress Button component's admin-blue hover color does
+     * not override it (blue text on the purple button = poor contrast). */
+    color: var(--contrast-text) !important;
     background-color: var(--lp-purple-hover);
     transition: 0.3s;
     outline: none !important;
@@ -71,8 +73,8 @@
 
 .outlined:hover,
 .outlined:focus {
-    color: var(--lp-purple);
-    background-color: var(--hover);
+    color: var(--lp-purple) !important;
+    background-color: #f1eefe;
     outline: none !important;
     box-shadow: none !important;
 }
@@ -87,7 +89,7 @@
 
 .text:hover,
 .text:focus {
-    color: var(--lp-purple-hover);
+    color: var(--lp-purple-hover) !important;
     background-color: var(--focus);
     border: none;
     box-shadow: none !important;
@@ -145,7 +147,7 @@
     color: var(--lp-info-dark);
 }
 
-:root{--text-color:#525459}.modal-root{align-items:center;display:flex;flex-direction:column;line-height:24px;margin-bottom:20px;text-align:center}.modal-root p{font-family:Open Sans}.cta-buttons{align-items:center;display:flex;gap:10px;margin-top:20px}.sign-out-header{color:var(--text-color);font-family:Value Serif;font-size:30px;margin-bottom:0;margin-top:25px}.sign-out-body{color:var(--text-color);font-size:15px;line-height:24px}.support-link{color:var(--lp-purple);margin-top:0}
+:root{--text-color:#525459}.modal-root{align-items:center;display:flex;flex-direction:column;line-height:24px;margin-bottom:20px;text-align:center}.modal-root p{font-family:Open Sans}.modal-root img{height:auto;margin-bottom:4px;width:200px}.cta-buttons{align-items:center;display:flex;gap:10px;margin-top:20px}.sign-out-header{color:var(--text-color);font-family:Value Serif;font-size:30px;margin-bottom:0;margin-top:25px}.sign-out-body{color:var(--text-color);font-size:15px;line-height:24px}.support-link{color:var(--lp-purple);margin-top:0}
 /* Root styles for each page view */
 .root {
     margin: 20px 20px 2px 0px;
