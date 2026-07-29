@@ -24,6 +24,7 @@ class DB {
     public static $db_versions = [
         '1.0.0',
         '1.2.0',
+        '1.2.3',
         // versions must be ordered from oldest to newest - top to bottom
     ];
 
@@ -119,5 +120,16 @@ class DB {
      */
     private function v1_2_0() {
         Page::add_nova_columns();
+    }
+
+    /**
+     * Database version 1.2.3. Widen columns that hold new-Leadpages (Nova) values (title, slug,
+     * url) which are unbounded on the platform. A title over the old name VARCHAR(255) aborted the
+     * whole page sync (HP-2528).
+     *
+     * @returns void
+     */
+    private function v1_2_3() {
+        Page::widen_long_text_columns();
     }
 }

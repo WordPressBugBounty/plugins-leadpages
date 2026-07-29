@@ -3,7 +3,7 @@ Tags: landing page, lead generation, leadpages, form builder, sales page
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.2.1
+Stable tag: 1.2.3
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -116,6 +116,17 @@ No! Leadpages does not put a limit on your leads so collect as many as you like.
 6. Migrate from Classic to the new Leadpages while keeping the same URL.
 
 == Changelog ==
+
+= 1.2.3 =
+* Release Date: 07/29/2026
+- Fixed: Syncing no longer fails when a new-Leadpages page has a long title or slug. Pages with titles over 255 characters previously caused a "Could not sync pages" error and stopped the whole sync; the page fields are now stored in full.
+- Improved: If a single page cannot be stored during a sync, it is skipped and logged instead of stopping the entire sync.
+
+= 1.2.2 =
+* Release Date: 07/29/2026
+- Fixed: The page list now respects which Leadpages account you are connected to. Your unpublished pages come only from the account you are signed into, while pages already published to your WordPress site keep showing (and serving) for both Classic and the new Leadpages, no matter which account you are currently signed into.
+- Fixed: Signing into Classic after using the new Leadpages now loads your Classic pages instead of staying on the new Leadpages.
+- Fixed: Signing out now clears the signed-out account's unpublished pages so they no longer appear for the next person who connects on the same site. Published pages are preserved and keep serving.
 
 = 1.2.1 =
 * Release Date: 07/29/2026

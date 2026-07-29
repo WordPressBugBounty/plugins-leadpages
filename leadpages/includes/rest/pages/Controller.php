@@ -142,8 +142,11 @@ class Controller extends \WP_REST_Controller {
             $connected = false;
         }
 
+        // The unpublished catalog is scoped to the connected platform; published pages show for both.
+        $platform = 'nova' === Options::get(Options::$platform) ? 'nova' : 'classic';
+
         try {
-            [$items, $total] = Page::get_many($page, $per_page, $connected, $order_by, $order, $search);
+            [$items, $total] = Page::get_many($page, $per_page, $connected, $order_by, $order, $search, $platform);
         } catch (DatabaseError $e) {
             return new \WP_Error('lp_wp_error', 'Could not retrieve pages', [ 'status' => 500 ]);
         } catch (\Exception $e) {
@@ -650,13 +653,23 @@ class Controller extends \WP_REST_Controller {
                 if (empty($nova_page->id)) {
                     continue;
                 }
+                // Record the id before attempting the write so a page that fails to store is not
+                // later tombstoned by the reconcile, and so one bad page cannot abort the sync.
                 $seen_ids[] = $nova_page->id;
 
-                $existing = Page::get($nova_page->id);
-                if (! $existing) {
-                    Page::create($nova_page, 'nova');
-                } else {
-                    Page::update($nova_page->id, $nova_page, 'nova');
+                try {
+                    $existing = Page::get($nova_page->id);
+                    if (! $existing) {
+                        Page::create($nova_page, 'nova');
+                    } else {
+                        Page::update($nova_page->id, $nova_page, 'nova');
+                    }
+                } catch (\Throwable $page_error) {
+                    $this->debug(
+                        'Skipping Nova page ' . $nova_page->id . ' that failed to sync: '
+                            . $page_error->getMessage(),
+                        __METHOD__
+                    );
                 }
             }
 

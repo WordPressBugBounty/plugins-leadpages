@@ -139,6 +139,39 @@ class Page extends ModelBase {
     }
 
     /**
+     * Widen the columns that store values sourced from the new Leadpages (Nova) backend, where the
+     * originals are unbounded `text`. A Nova page whose title exceeded name's old VARCHAR(255) made
+     * WordPress's $wpdb reject the write, which aborted the entire sync (HP-2528); production has
+     * titles past 600 chars and slugs past 255. lp_slug in particular cannot simply be truncated
+     * because it builds the /raw serving URL. Widening is additive and lossless; nullability is
+     * preserved to match the original column definitions.
+     *
+     * ALTER ... MODIFY is effectively idempotent (re-applying the same type is a no-op), so the
+     * version-gated migration needs no per-column existence check.
+     *
+     * @return void
+     * @throws DatabaseError
+     */
+    public static function widen_long_text_columns() {
+        global $wpdb;
+        $table = $wpdb->prefix . self::table_name;
+
+        $modifications = [
+            'MODIFY name TEXT NOT NULL',
+            'MODIFY lp_slug VARCHAR(2048) NOT NULL',
+            'MODIFY published_url VARCHAR(2048) NULL',
+            'MODIFY current_edition VARCHAR(100) NULL',
+        ];
+
+        foreach ($modifications as $modification) {
+            // Table/column names are controlled constants, never user input.
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+            $wpdb->query("ALTER TABLE `$table` $modification");
+            self::throw_on_db_error();
+        }
+    }
+
+    /**
      * Prepare raw landing page data from a foundry request for the database
      *
      * @param object $data should be raw landing page data from foundry
@@ -334,7 +367,7 @@ class Page extends ModelBase {
      * @return array results and total page count for the query returned in the form [ results, total_count ]
      * @throws DatabaseError
      */
-    public static function get_many( $page, $per_page, $connected, $order_by, $order, $search ) {
+    public static function get_many( $page, $per_page, $connected, $order_by, $order, $search, $platform = null ) {
         global $wpdb;
 
         $allowed_orderby = [ 'ASC', 'DESC' ];
@@ -350,9 +383,27 @@ class Page extends ModelBase {
         $page_sql = 'SELECT * FROM ' . $wpdb->prefix . self::table_name . ' WHERE current_edition IS NOT NULL AND deleted_at IS NULL AND split_test IS NULL';
         $count_sql = 'SELECT COUNT(*) FROM ' . $wpdb->prefix . self::table_name . ' WHERE current_edition IS NOT NULL AND deleted_at IS NULL AND split_test IS NULL';
 
-        if (null !== $connected) {
-            $page_sql .= $wpdb->prepare(' AND connected = %d', $connected);
-            $count_sql .= $wpdb->prepare(' AND connected = %d', $connected);
+        // Scope by connection state and platform. Published pages (connected = 1) are a property of
+        // the WordPress site and are shown for BOTH platforms, so a customer keeps seeing every page
+        // that is live regardless of which account is currently connected. The unpublished catalog
+        // (connected = 0) belongs to the connected account, so it is scoped to the active platform.
+        // A null $platform leaves platform scoping off (back-compat for existing callers/tests).
+        if (true === $connected) {
+            $page_sql .= ' AND connected = 1';
+            $count_sql .= ' AND connected = 1';
+        } elseif (false === $connected) {
+            $page_sql .= ' AND connected = 0';
+            $count_sql .= ' AND connected = 0';
+            if (null !== $platform) {
+                $platform_clause = $wpdb->prepare(' AND platform = %s', $platform);
+                $page_sql .= $platform_clause;
+                $count_sql .= $platform_clause;
+            }
+        } elseif (null !== $platform) {
+            // status "all": every published page plus the active platform's catalog.
+            $all_clause = $wpdb->prepare(' AND (connected = 1 OR platform = %s)', $platform);
+            $page_sql .= $all_clause;
+            $count_sql .= $all_clause;
         }
 
         if ('' !== $search) {
@@ -396,6 +447,32 @@ class Page extends ModelBase {
 
         self::throw_on_db_error();
         return $results;
+    }
+
+    /**
+     * Delete the unpublished catalog rows (connected = 0) for a platform.
+     *
+     * Published rows (connected = 1) are intentionally left untouched: a page already serving at a
+     * WordPress slug is a property of the site and must keep serving regardless of which account is
+     * connected. Used on disconnect so a previous account's available-pages list does not linger for
+     * the next connection.
+     *
+     * @param string $platform 'classic' | 'nova'
+     * @return void
+     * @throws DatabaseError
+     */
+    public static function delete_catalog_by_platform( $platform ) {
+        global $wpdb;
+
+        $wpdb->query(
+            $wpdb->prepare(
+                // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                'DELETE FROM ' . $wpdb->prefix . self::table_name . ' WHERE platform = %s AND connected = 0',
+                $platform
+            )
+        );
+
+        self::throw_on_db_error();
     }
 
     /**

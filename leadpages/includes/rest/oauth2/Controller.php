@@ -5,6 +5,7 @@ namespace Leadpages\rest\oauth2;
 defined('ABSPATH') || die('No script kiddies please!'); // Avoid direct file request
 
 use Leadpages\models\Options;
+use Leadpages\models\Page;
 use Leadpages\providers\http\Client;
 use Leadpages\providers\config\Config;
 use Leadpages\providers\http\exceptions\HTTPException;
@@ -208,6 +209,14 @@ class Controller {
         Options::set(Options::$refresh_token, $data['refresh_token']);
         Options::set(Options::$access_token, $data['access_token']);
 
+        // Mark Classic as the active backend. This must be set explicitly: a prior Nova connection
+        // leaves $platform = 'nova', which would otherwise keep the sync + page list stuck on Nova.
+        Options::set(Options::$platform, 'classic');
+        // Force the next sync to be a full sync for this account. The sync cursor is shared and may
+        // have been advanced by a previous connection, which would make the incremental Classic sync
+        // fetch nothing.
+        Options::delete(Options::$last_page_sync_date);
+
         $this->debug('Successfully authorized the user');
         wp_safe_redirect(admin_url($base_redirect_path));
 
@@ -241,6 +250,10 @@ class Controller {
     public function handle_sign_out() {
         Options::delete(Options::$refresh_token);
         Options::delete(Options::$access_token);
+
+        // Drop this account's unpublished catalog so it does not linger for the next connection.
+        // Published pages (connected = 1) are left intact so live pages keep serving.
+        Page::delete_catalog_by_platform('classic');
 
         return new \WP_REST_Response(null, 204);
     }

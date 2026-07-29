@@ -5,6 +5,7 @@ namespace Leadpages\rest\nova;
 defined('ABSPATH') || die('No script kiddies please!'); // Avoid direct file request
 
 use Leadpages\models\Options;
+use Leadpages\models\Page;
 use Leadpages\providers\http\Client;
 use Leadpages\providers\http\auth\OAuthAuthProvider;
 use Leadpages\providers\config\Config;
@@ -286,6 +287,10 @@ class Controller {
         Options::delete(Options::$platform);
         Options::delete(Options::$nova_popup_id);
         $this->clear_transient_flow_state();
+
+        // Drop this account's unpublished catalog so it does not linger for the next connection.
+        // Published pages (connected = 1) are left intact so live pages keep serving.
+        Page::delete_catalog_by_platform('nova');
 
         return new \WP_REST_Response(null, 204);
     }
