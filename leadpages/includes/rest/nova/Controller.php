@@ -6,6 +6,7 @@ defined('ABSPATH') || die('No script kiddies please!'); // Avoid direct file req
 
 use Leadpages\models\Options;
 use Leadpages\models\Page;
+use Leadpages\PopupScope;
 use Leadpages\providers\http\Client;
 use Leadpages\providers\http\auth\OAuthAuthProvider;
 use Leadpages\providers\config\Config;
@@ -113,11 +114,31 @@ class Controller {
                     'callback'            => [ $this, 'save_popup' ],
                     'permission_callback' => [ $this, 'manage_options_permissions_check' ],
                     'args'                => [
-                        'popupId' => [
-                            'description'       => 'The id of the Nova pop-up to embed site-wide, or null to disable.',
+                        'popupId'   => [
+                            'description'       => 'The id of the Leadpages pop-up to embed, or null to disable.',
                             'type'              => [ 'string', 'null' ],
                             'sanitize_callback' => function ( $param ) {
                                 return is_null($param) ? null : sanitize_text_field($param);
+                            },
+                        ],
+                        'scopeMode' => [
+                            'description' => 'Which pages the pop-up shows on.',
+                            'type'        => 'string',
+                            'enum'        => [
+                                PopupScope::MODE_WORDPRESS,
+                                PopupScope::MODE_WORDPRESS_AND_LEADPAGES,
+                                PopupScope::MODE_SPECIFIC,
+                            ],
+                        ],
+                        'slugs'     => [
+                            'description'       => 'Slugs the pop-up is limited to in "specific" scope mode.',
+                            'type'              => 'array',
+                            'items'             => [ 'type' => 'string' ],
+                            'sanitize_callback' => function ( $param ) {
+                                if (! is_array($param)) {
+                                    return [];
+                                }
+                                return array_values(array_unique(array_filter(array_map('sanitize_title', $param))));
                             },
                         ],
                     ],
@@ -286,6 +307,7 @@ class Controller {
         Options::delete(Options::$nova_org_id);
         Options::delete(Options::$platform);
         Options::delete(Options::$nova_popup_id);
+        Options::delete(Options::$nova_popup_scope);
         $this->clear_transient_flow_state();
 
         // Drop this account's unpublished catalog so it does not linger for the next connection.
@@ -311,6 +333,7 @@ class Controller {
                 'enabled'    => false,
                 'popups'     => [],
                 'selectedId' => null,
+                'scope'      => PopupScope::get(),
             ]);
         }
 
@@ -333,25 +356,64 @@ class Controller {
             'enabled'    => $enabled,
             'popups'     => $popups,
             'selectedId' => $selected_id ? $selected_id : null,
+            'scope'      => PopupScope::get(),
         ]);
     }
 
     /**
-     * Save (or clear) the Nova pop-up that should be embedded site-wide.
+     * Save the Nova pop-up selection and/or its page scope. Each field is updated independently so a
+     * caller can change just the selected pop-up or just the scope without clobbering the other.
      *
      * @param \WP_REST_Request $request
      * @return \WP_REST_Response
      */
     public function save_popup( $request ) {
-        $popup_id = $request->get_param('popupId');
+        if ($request->has_param('popupId')) {
+            $popup_id = $request->get_param('popupId');
+            if (empty($popup_id)) {
+                Options::delete(Options::$nova_popup_id);
+            } else {
+                Options::set(Options::$nova_popup_id, $popup_id);
+            }
+        }
 
-        if (empty($popup_id)) {
-            Options::delete(Options::$nova_popup_id);
-        } else {
-            Options::set(Options::$nova_popup_id, $popup_id);
+        if ($request->has_param('scopeMode')) {
+            $this->save_scope($request->get_param('scopeMode'), (array) $request->get_param('slugs'));
         }
 
         return new \WP_REST_Response(null, 204);
+    }
+
+    /**
+     * Persist the pop-up page scope. WordPress-only is the default so it clears the option; the
+     * WordPress-plus-Leadpages and specific modes are stored (the latter with its selected slugs).
+     *
+     * @param string $mode one of the PopupScope::MODE_* values
+     * @param string[] $slugs slugs to limit the pop-up to when mode is "specific"
+     * @return void
+     */
+    private function save_scope( $mode, $slugs ) {
+        if (PopupScope::MODE_SPECIFIC === $mode) {
+            Options::set(
+                Options::$nova_popup_scope,
+                [
+                    'mode'  => PopupScope::MODE_SPECIFIC,
+                    'slugs' => array_values(array_map('strval', $slugs)),
+                ]
+            );
+            return;
+        }
+        if (PopupScope::MODE_WORDPRESS_AND_LEADPAGES === $mode) {
+            Options::set(
+                Options::$nova_popup_scope,
+                [
+                    'mode'  => PopupScope::MODE_WORDPRESS_AND_LEADPAGES,
+                    'slugs' => [],
+                ]
+            );
+            return;
+        }
+        Options::delete(Options::$nova_popup_scope);
     }
 
     /**

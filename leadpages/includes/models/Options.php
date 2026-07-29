@@ -45,6 +45,11 @@ class Options {
     // The Nova pop-up selected to be embedded site-wide, if any.
     public static $nova_popup_id = LEADPAGES_OPT_PREFIX . '_nova_popup_id';
 
+    // Where the selected pop-up shows. Absent = WordPress pages only (proxied Leadpages pages
+    // excluded). When set: [ 'mode' => 'wordpress_and_leadpages' ] to also cover proxied pages, or
+    // [ 'mode' => 'specific', 'slugs' => string[] ] to limit the pop-up to those page/post slugs.
+    public static $nova_popup_scope = LEADPAGES_OPT_PREFIX . '_nova_popup_scope';
+
     /*
      * Get and return an option with the given name
      *
@@ -93,5 +98,6 @@ class Options {
         self::delete(self::$nova_refresh_token);
         self::delete(self::$nova_access_token);
         self::delete(self::$nova_popup_id);
+        self::delete(self::$nova_popup_scope);
     }
 }

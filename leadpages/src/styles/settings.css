@@ -22,3 +22,18 @@
     color: #191333;
     margin: 0 0 14px;
 }
+
+.root .popup-scope-pages {
+    max-height: 220px;
+    overflow-y: auto;
+    margin-top: 8px;
+    padding: 8px 4px;
+    border: 1px solid #e7e2f6;
+    border-radius: 10px;
+}
+
+.root .popup-scope-empty {
+    margin: 0;
+    color: #6b6580;
+    font-size: 13px;
+}

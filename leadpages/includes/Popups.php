@@ -5,16 +5,15 @@ namespace Leadpages;
 defined('ABSPATH') || die('No script kiddies please!'); // Avoid direct file request
 
 use Leadpages\providers\Utils;
-use Leadpages\providers\config\Config;
-use Leadpages\models\Options;
+use Leadpages\PopupScope;
 
 /**
- * Injects a selected Nova (new Leadpages) pop-up embed script site-wide on the front end.
+ * Injects a selected Nova (new Leadpages) pop-up embed script on the front end.
  *
  * The embed script is public and loads asynchronously. It is enqueued on normal WordPress front-end
- * requests via wp_enqueue_scripts. Proxied landing pages exit() on init (long before the enqueue
- * hook runs), so this only affects the customer's own WordPress pages, which is the intended surface
- * for a site-wide pop-up.
+ * requests via wp_enqueue_scripts, gated by the configured page scope (all pages, or only the
+ * selected pages/posts). Proxied landing pages exit() on init (long before the enqueue hook runs),
+ * so the Proxy injects the same embed for those pages, reading the same scope from PopupScope.
  */
 class Popups {
 
@@ -23,28 +22,24 @@ class Popups {
     /** @var string script handle for the pop-up embed */
     private const HANDLE = 'leadpages-nova-popup';
 
-    /** @var Config */
-    private $config;
-
-    public function __construct() {
-        $this->config = Config::get_instance();
-    }
-
     /**
-     * Enqueue the selected pop-up's embed script if one has been chosen. No output otherwise.
-     * Enqueued (not printed directly) so it goes through the standard WordPress script pipeline
-     * and passes plugin-check's NonEnqueuedScript rule.
+     * Enqueue the selected pop-up's embed script when one is chosen and the current front-end page is
+     * within the configured scope. No output otherwise. Enqueued (not printed directly) so it goes
+     * through the standard WordPress script pipeline and passes plugin-check's NonEnqueuedScript rule.
      *
      * @return void
      */
     public function inject_embed() {
-        $popup_id = Options::get(Options::$nova_popup_id);
+        $popup_id = PopupScope::selected_popup_id();
         if (empty($popup_id)) {
             return;
         }
 
-        $src = untrailingslashit($this->config->get('NOVA_APP_URL'))
-            . '/api/popup/' . rawurlencode($popup_id) . '/embed.js';
+        if (! PopupScope::allows_current_request()) {
+            return;
+        }
+
+        $src = PopupScope::embed_src($popup_id);
 
         // The embed URL is versioned by Nova, so no WordPress ?ver should be appended (null version).
         // phpcs:ignore WordPress.WP.EnqueuedResourceParameters.MissingVersion -- Nova versions the URL.

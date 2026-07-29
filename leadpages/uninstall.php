@@ -29,3 +29,4 @@ delete_option('lp_nova_oauth_state');
 delete_option('lp_nova_access_token');
 delete_option('lp_nova_refresh_token');
 delete_option('lp_nova_popup_id');
+delete_option('lp_nova_popup_scope');

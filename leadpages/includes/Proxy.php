@@ -10,6 +10,7 @@ use Leadpages\providers\http\exceptions\ServerException;
 use Leadpages\providers\http\exceptions\NotFoundException;
 use Leadpages\models\Page;
 use Leadpages\models\Options;
+use Leadpages\PopupScope;
 use Leadpages\serving\PageSource;
 use Leadpages\serving\ClassicPageSource;
 use Leadpages\serving\NovaPageSource;
@@ -29,6 +30,9 @@ class Proxy {
 
     /** The serving-tag meta value injected into the current response (set per request in render). */
     private static $serving_tag = 'wordpress-official';
+
+    /** The pop-up embed <script> injected before </body> for the current response, or '' for none. */
+    private static $popup_embed = '';
 
     public function __construct() {
         $this->client = new Client();
@@ -64,6 +68,11 @@ class Proxy {
 
         $source = $this->source_for($page);
         $cache_key = $source->cache_key($page);
+
+        // The proxy exits before wp_enqueue_scripts runs, so the site-wide pop-up enqueue never fires
+        // for proxied pages. Inject the same embed here, gated by the same scope (matched on this
+        // request's slug) so a "specific pages" selection covers proxied pages too.
+        self::$popup_embed = $this->build_popup_embed($slug);
 
         $cached_value = Cache::get($cache_key);
         if ($cached_value) {
@@ -237,6 +246,25 @@ class Proxy {
     }
 
     /**
+     * Build the pop-up embed <script> tag for a served slug, or '' when no pop-up is selected or the
+     * slug is outside the configured scope. The URL is the same public embed the site-wide enqueue
+     * uses; PopupScope is the single source of truth so proxied pages honor the same selection.
+     *
+     * @param string $slug the slug of the page being served
+     * @return string
+     */
+    private function build_popup_embed( $slug ) {
+        $popup_id = PopupScope::selected_popup_id();
+        if (empty($popup_id) || ! PopupScope::allows_slug($slug)) {
+            return '';
+        }
+        // The proxy injects into already-rendered HTML and exits before wp_enqueue_scripts runs, so
+        // the embed cannot go through the enqueue pipeline and is emitted as a literal script tag.
+        // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- injected into proxied HTML.
+        return '<script async src="' . esc_url(PopupScope::embed_src($popup_id)) . '"></script>';
+    }
+
+    /**
      * Wrap the exit construct for testing purposes
      */
     public function lp_exit() {
@@ -258,7 +286,23 @@ class Proxy {
     public static function preprocess_html( $content ) {
         $html = self::modify_url_tag($content);
         $html = self::modify_serving_tags($html);
+        $html = self::modify_popup_embed($html);
         return $html;
+    }
+
+    /**
+     * Output buffering callback to inject the Nova pop-up embed <script> before the closing </body>
+     * tag. No-op when no pop-up applies to this response (none selected or slug out of scope) or when
+     * the HTML has no </body>.
+     *
+     * @param string $content html
+     * @return string
+     */
+    public static function modify_popup_embed( $content ) {
+        if ('' === self::$popup_embed) {
+            return $content;
+        }
+        return str_replace('</body>', self::$popup_embed . '</body>', $content);
     }
 
     /**

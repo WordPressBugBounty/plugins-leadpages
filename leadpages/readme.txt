@@ -3,7 +3,7 @@ Tags: landing page, lead generation, leadpages, form builder, sales page
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.2.3
+Stable tag: 1.3.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -116,6 +116,11 @@ No! Leadpages does not put a limit on your leads so collect as many as you like.
 6. Migrate from Classic to the new Leadpages while keeping the same URL.
 
 == Changelog ==
+
+= 1.3.0 =
+* Release Date: 07/29/2026
+- New: Choose where your pop-up appears: all WordPress pages, all WordPress pages plus your published Leadpages pages, or only specific pages you select.
+- New: Pop-ups can now appear on your published Leadpages pages served through your WordPress site, not only your WordPress pages.
 
 = 1.2.3 =
 * Release Date: 07/29/2026
