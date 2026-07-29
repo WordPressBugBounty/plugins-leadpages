@@ -11,5 +11,6 @@ const HOME_URL = LEADPAGES_DATA.homeUrl ?? 'your.domain.com';
 const LEADPAGES_URL = LEADPAGES_DATA.leadpagesUrl ?? 'https://my.leadpages.com/';
 const BUILDER_URL = LEADPAGES_DATA.builderUrl ?? 'https://pages.leadpages.com/';
 const NOVA_DASHBOARD_URL = LEADPAGES_DATA.novaDashboardUrl ?? 'https://leadpages.com';
+const NOVA_APP_URL = LEADPAGES_DATA.novaAppUrl ?? 'https://leadpages.com';
 
-export { HOME_URL, LEADPAGES_URL, BUILDER_URL, NOVA_DASHBOARD_URL };
+export { HOME_URL, LEADPAGES_URL, BUILDER_URL, NOVA_DASHBOARD_URL, NOVA_APP_URL };

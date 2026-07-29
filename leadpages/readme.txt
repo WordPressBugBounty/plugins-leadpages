@@ -1,9 +1,9 @@
 === Leadpages ===
 Tags: landing page, lead generation, leadpages, form builder, sales page
 Requires at least: 6.0
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -66,6 +66,7 @@ Classic Leadpages (leadpages.com / leadpages.io):
 New Leadpages / Nova (leadpages.com):
 - When you connect, the plugin runs an OAuth 2.0 (PKCE) sign-in against the new Leadpages authorize and token endpoints and stores the resulting access and refresh tokens in your WordPress options table (never displayed; erased on sign out, deactivate, or uninstall).
 - When you sync, the plugin requests your published pages from `/api/pages`, per-page metrics from `/api/analytics/pages`, and your pop-ups from `/api/popups`, using your token.
+- In the plugin's page list, each new-Leadpages page shows a small preview thumbnail loaded from the public, cached `/api/thumbnails/{id}` endpoint (a placeholder icon is shown when a page has no thumbnail).
 - When a visitor loads a connected page, the plugin fetches that page's HTML from `/api/pages/{slug}/raw` (a public endpoint for published pages) and serves it at your WordPress URL. The visitor's cookies and IP are forwarded so per-visitor experiments and personalization work; response cookies are passed back to the visitor.
 - If you choose to show a pop-up, the plugin adds the public embed script `/api/popup/{id}/embed.js` to your site.
 
@@ -116,8 +117,15 @@ No! Leadpages does not put a limit on your leads so collect as many as you like.
 
 == Changelog ==
 
+= 1.2.1 =
+* Release Date: 07/29/2026
+- Improved: Refreshed the plugin's admin design, including a cleaner connect screen and a new card-based page manager.
+- Improved: Per-page actions (edit, publish, view, and more) are now grouped into a single menu on each page for a tidier layout.
+- Tested up to WordPress 7.0.
+- No change to publishing, syncing, or serving behavior.
+
 = 1.2.0 =
-* Release Date: TBD
+* Release Date: 07/28/2026
 - New: Connect the new Leadpages ("Nova") platform over OAuth and publish your new-Leadpages pages to your WordPress site, alongside the existing Classic support.
 - New: Sync published new-Leadpages pages with visitor and conversion-rate analytics columns.
 - New: Serve new-Leadpages pages at a WordPress slug via server-side reverse proxy, with per-visitor experiments/personalization (cookie and visitor-IP passthrough) and cache handling that honors the page's cache settings.

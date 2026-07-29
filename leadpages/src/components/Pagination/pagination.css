@@ -2,18 +2,49 @@
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    margin-top: 0;
+    gap: 8px;
+    margin-top: 16px;
+    font-size: 13px;
+    color: #56507a;
 }
 
-.lp-pagination button {
-    margin: 5px;
-    color: inherit;
+.lp-pagination .components-button {
+    margin: 0;
+    height: 34px;
+    border-radius: 20px;
+    color: #56507a;
+    box-shadow: inset 0 0 0 1px #e7e2f6;
+}
+
+.lp-pagination .components-button:hover:not(:disabled) {
+    color: #6245f2;
+    background: #efebfe;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #6245f2 35%, #e7e2f6);
+}
+
+.lp-pagination .components-button:disabled {
+    opacity: 0.5;
 }
 
 .lp-page-count-page {
-    font-weight: 600;
+    font-weight: 700;
+    color: #191333;
+    font-variant-numeric: tabular-nums;
 }
 
 .lp-page-size-dropdown {
     font-size: 13px !important;
+    height: 34px;
+    border-radius: 20px;
+    border: 1px solid #e7e2f6;
+    background: #faf9fe;
+    color: #191333;
+    padding: 0 10px;
+    margin-left: 4px;
+}
+
+.lp-page-size-dropdown:focus {
+    outline: none;
+    border-color: color-mix(in srgb, #6245f2 55%, #e7e2f6);
+    box-shadow: 0 0 0 3px color-mix(in srgb, #6245f2 18%, transparent);
 }

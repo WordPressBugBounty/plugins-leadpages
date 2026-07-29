@@ -195,6 +195,7 @@ class Assets {
                 'leadpagesUrl'     => $this->config->get('LEADPAGES_URL'),
                 'builderUrl'       => $this->config->get('BUILDER_URL'),
                 'novaDashboardUrl' => $this->config->get('NOVA_DASHBOARD_URL'),
+                'novaAppUrl'       => $this->config->get('NOVA_APP_URL'),
             ]
         );
 

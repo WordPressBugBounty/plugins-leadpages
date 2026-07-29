@@ -1,53 +1,159 @@
-/* Styling handled for Landing Pages */
+@import "../../styles/leadpages_global.css";
 
+/* Connected view chrome (header, search, tabs) for the Leadpages plugin. Scoped
+ * under .root so it does not affect other views. Restyle only; the flow (tabs,
+ * search, refresh, per-row publish) is unchanged. */
+
+.root {
+    --lp-ink: #191333;
+    --lp-ink-2: #56507a;
+    --lp-ink-3: #8e88ac;
+    --lp-line: #e7e2f6;
+    --lp-surface: #ffffff;
+    --lp-surface-2: #faf9fe;
+    --lp-brand: var(--lp-purple);
+    --lp-brand-soft: #efebfe;
+
+    font-family: "Apercu Pro", system-ui, sans-serif;
+    color: var(--lp-ink);
+    max-width: 1120px;
+    margin: 12px auto 0;
+}
+
+/* ---------- Header ---------- */
+.root .heading {
+    font-family: "Value Serif", Georgia, serif;
+    font-weight: 600;
+    font-size: 26px;
+    letter-spacing: -0.015em;
+    color: var(--lp-ink);
+    margin: 0 0 2px;
+    padding: 0;
+}
+
+.root h4 {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--lp-ink-3);
+    margin: 0 0 18px;
+}
+
+/* ---------- Search + refresh ---------- */
 .search-container {
     display: flex;
     justify-content: flex-end;
-    margin-bottom: 15px;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
 }
 
 .search-input {
-    width: 200px;
-    padding: 0 10px;
+    width: 240px;
+    height: 38px;
+    padding: 0 14px;
+    border: 1px solid var(--lp-line);
+    border-radius: 22px;
+    background: var(--lp-surface-2);
+    color: var(--lp-ink);
+    font-size: 14px;
 }
 
-/* Search bar in mobile */
-@media only screen and (max-width: 530px) {
-    .search-container {
-        justify-content: flex-start;
-    }
+.search-input:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--lp-brand) 55%, var(--lp-line));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--lp-brand) 18%, transparent);
+    background: var(--lp-surface);
 }
 
-/* Search / Refresh buttons */
-.components-button.is-secondary {
-    background-color: #fff;
-    gap: 5px;
+/* Search / refresh buttons (WordPress secondary buttons) restyled to match. */
+.root .components-button.is-secondary {
+    height: 38px;
+    border-radius: 22px;
+    background-color: var(--lp-surface);
+    box-shadow: inset 0 0 0 1px var(--lp-line);
+    color: var(--lp-ink-2);
+    gap: 6px;
+    transition: color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
-.components-button.is-secondary:hover {
-    background-color: #f0f0f1;
+.root .components-button.is-secondary:hover:not(:disabled) {
+    color: var(--lp-brand);
+    background-color: var(--lp-brand-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lp-brand) 35%, var(--lp-line));
 }
 
-/* fixing the width so that layout doesn't shift between "search" and "clear" text */
+/* keep the width stable between "Search" and "Clear" labels */
 .search-button {
     display: block;
     text-align: center;
-    margin-left: 10px;
-    width: 70px;
+    width: 84px;
 }
 
 .refresh-button {
-    margin-left: 14px;
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 5px;
 }
 
 .refresh-button:disabled img {
     filter: invert(57%) sepia(31%) saturate(0%) hue-rotate(205deg) brightness(96%) contrast(95%);
 }
 
-/* Loading state for navigating between tabs/fetching new data */
+@media only screen and (max-width: 530px) {
+    .search-container {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .search-input {
+        width: 100%;
+    }
+}
+
+/* ---------- Tabs (WordPress TabPanel) as a segmented control ---------- */
+.root .components-tab-panel__tabs {
+    display: inline-flex;
+    gap: 4px;
+    background: var(--lp-surface-2);
+    border: 1px solid var(--lp-line);
+    padding: 4px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+
+.root .components-tab-panel__tabs-item {
+    font-family: "Apercu Pro", system-ui, sans-serif;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--lp-ink-2);
+    padding: 8px 16px;
+    border-radius: 8px;
+    box-shadow: none;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+/* WordPress draws an active underline via ::after; remove it for the pill look. */
+.root .components-tab-panel__tabs-item::after {
+    display: none;
+}
+
+.root .components-tab-panel__tabs-item:hover {
+    color: var(--lp-brand);
+}
+
+.root .components-tab-panel__tabs-item.is-active {
+    color: var(--lp-brand);
+    background: var(--lp-surface);
+    box-shadow: 0 1px 2px rgba(25, 19, 51, 0.08);
+}
+
+.root .components-tab-panel__tabs-item.is-active:focus {
+    box-shadow: 0 1px 2px rgba(25, 19, 51, 0.08);
+}
+
+/* Loading state for navigating between tabs / fetching new data */
 .loading-cell {
     display: flex;
     justify-content: center;

@@ -1,32 +1,69 @@
-@import "../../styles/wordpress_global.css";
+@import "../../styles/leadpages_global.css";
 
-.lp-modal p {
-    margin: 0;
-    line-height: 20px;
+/*
+ * Shared styling for the Publish / Unpublish modals (WordPress Modal component
+ * with the .lp-modal className). Restyle only, matching the refreshed cards:
+ * Value Serif title, rounded inputs with a brand focus ring, brand-colored
+ * primary action. Layout classes and behavior are unchanged.
+ */
+
+.lp-modal {
+    --m-ink: #191333;
+    --m-ink-2: #56507a;
+    --m-ink-3: #8e88ac;
+    --m-line: #e7e2f6;
+    --m-surface-2: #faf9fe;
+    --m-brand: var(--lp-purple);
+    --m-brand-deep: var(--lp-purple-hover);
+    --m-brand-soft: #efebfe;
+
+    border-radius: 16px;
+    font-family: "Apercu Pro", system-ui, sans-serif;
+    color: var(--m-ink);
 }
 
 .lp-modal h1 {
-    font-weight: 400 !important;
-    font-size: 20px !important;
+    font-family: "Value Serif", Georgia, serif;
+    font-weight: 600 !important;
+    font-size: 22px !important;
+    letter-spacing: -0.01em;
+    color: var(--m-ink);
+}
+
+.lp-modal p {
+    margin: 0;
+    line-height: 1.5;
+    color: var(--m-ink-2);
 }
 
 .lp-modal h4 {
     font-size: 14px;
-    line-height: 20px;
+    font-weight: 600;
+    line-height: 1.4;
     margin: 0;
+    color: var(--m-ink);
 }
 
 .lp-modal input {
     width: 100%;
-    border: 1px solid #949494;
-    border-radius: 2px;
-    height: 36px;
-    padding: 0 16px;
-    color: #949494;
+    border: 1px solid var(--m-line);
+    border-radius: 8px;
+    height: 40px;
+    padding: 0 14px;
+    color: var(--m-ink);
+    background: var(--m-surface-2);
+    font-size: 14px;
+}
+
+.lp-modal input:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--m-brand) 55%, var(--m-line));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--m-brand) 18%, transparent);
+    background: #ffffff;
 }
 
 .modal-grey {
-    color: #757575;
+    color: var(--m-ink-3);
 }
 
 .modal-notice {
@@ -34,7 +71,9 @@
 }
 
 .modal-section-break {
-    margin: 16px -32px;
+    margin: 20px -32px;
+    border: 0;
+    border-top: 1px solid var(--m-line);
 }
 
 .modal-section {
@@ -51,8 +90,9 @@
 }
 
 .modal-page-info {
-    margin: 0px;
+    margin: 0;
     font-weight: 600;
+    color: var(--m-ink) !important;
 }
 
 .modal-slug {
@@ -74,4 +114,40 @@
 
 .modal-button {
     width: fit-content;
+}
+
+/* Buttons: brand-colored primary, quiet secondary / tertiary. */
+.lp-modal .components-button.is-primary {
+    background: var(--m-brand);
+    border-radius: 22px;
+    padding: 0 18px;
+    height: 38px;
+}
+
+.lp-modal .components-button.is-primary:hover:not(:disabled),
+.lp-modal .components-button.is-primary:focus:not(:disabled) {
+    background: var(--m-brand-deep);
+}
+
+.lp-modal .components-button.is-secondary {
+    border-radius: 22px;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--m-brand) 40%, transparent);
+    color: var(--m-brand);
+    height: 38px;
+}
+
+.lp-modal .components-button.is-secondary:hover:not(:disabled) {
+    background: var(--m-brand-soft);
+    box-shadow: inset 0 0 0 1px var(--m-brand);
+}
+
+.lp-modal .components-button.is-tertiary {
+    border-radius: 22px;
+    color: var(--m-ink-2);
+    height: 38px;
+}
+
+.lp-modal .components-button.is-tertiary:hover:not(:disabled) {
+    background: var(--m-surface-2);
+    color: var(--m-ink);
 }

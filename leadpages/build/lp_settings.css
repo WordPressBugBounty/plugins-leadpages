@@ -148,22 +148,4 @@
 }
 
 :root{--text-color:#525459}.modal-root{align-items:center;display:flex;flex-direction:column;line-height:24px;margin-bottom:20px;text-align:center}.modal-root p{font-family:Open Sans}.modal-root img{height:auto;margin-bottom:4px;width:200px}.cta-buttons{align-items:center;display:flex;gap:10px;margin-top:20px}.sign-out-header{color:var(--text-color);font-family:Value Serif;font-size:30px;margin-bottom:0;margin-top:25px}.sign-out-body{color:var(--text-color);font-size:15px;line-height:24px}.support-link{color:var(--lp-purple);margin-top:0}
-/* Root styles for each page view */
-.root {
-    margin: 20px 20px 2px 0px;
-}
-
-/* Plugin name heading */
-.heading {
-    font-size: 23px;
-    font-weight: 400;
-    line-height: 1.3;
-}
-
-.lp-notice {
-    margin-left: 0px;
-    margin-right: 0px;
-    margin-top: 15px;
-}
-
-.card{width:438px}.account-header{margin-top:0}.settings-card{width:438px}
+.root .card,.root .settings-card{background:#fff;border:1px solid #e7e2f6;border-radius:14px;box-shadow:0 1px 2px rgba(25,19,51,.06);margin-bottom:14px;max-width:100%;width:480px}.root .account-header{color:#191333;font-family:"Value Serif",Georgia,serif;font-size:17px;font-weight:600;letter-spacing:-.01em;margin:0 0 14px}

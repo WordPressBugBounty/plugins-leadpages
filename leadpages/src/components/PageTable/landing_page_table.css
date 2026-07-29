@@ -1,135 +1,385 @@
-@import "../../styles/wordpress_global.css";
+@import "../../styles/leadpages_global.css";
 
-.table {
-    width: 100%;
-    border-collapse: collapse;
+/*
+ * Page list for the Leadpages WordPress plugin. Each page renders as a card:
+ * a monogram tile, the page name + WordPress URL badge + status/platform pills,
+ * clean visitor/conversion metrics, and the row's actions. Replaces the striped
+ * table; behavior (sorting, pagination, actions) is unchanged.
+ */
+
+.lp-pagelist {
+    --card-ink: #191333;
+    --card-ink-2: #56507a;
+    --card-ink-3: #8e88ac;
+    --card-line: #e7e2f6;
+    --card-line-2: #efebfb;
+    --card-surface: #ffffff;
+    --card-surface-2: #faf9fe;
+    --card-brand: var(--lp-purple);
+    --card-brand-deep: var(--lp-purple-hover);
+    --card-brand-soft: #efebfe;
+    --card-violet: #8b6cf6;
+    --card-good: #0e9f6e;
+    --card-good-soft: #e4f6ee;
+    --card-warn: #b05a00;
+    --card-warn-soft: #fbecd8;
+
+    font-family: "Apercu Pro", system-ui, sans-serif;
+    color: var(--card-ink);
 }
 
-.table-data {
-    padding: 12px;
-    height: 30px;
-    font-weight: 500;
-}
-
-.page-name {
-    max-width: 300px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--main-blue-color);
-}
-
-.page-wp_slug {
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* Table header styles */
-
-.column-header {
-    background-color: #ffffff;
-    padding: 16px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #000000;
-    text-align: left;
-}
-
-.sortable-header {
+/* ---------- Sort bar ---------- */
+.lp-sortbar {
     display: flex;
     align-items: center;
-    cursor: pointer;
-    color: var(--main-blue-color);
-    background-color: transparent;
-    border: none;
-    padding: 0px;
+    gap: 6px;
+    padding: 4px 2px 14px;
 }
 
-/* Controls sorting caret as up/down */
+.lp-sortbar-label {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--card-ink-3);
+    font-weight: 600;
+    margin-right: 4px;
+}
 
-.caret.up {
+.lp-sort-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--card-ink-2);
+    background: var(--card-surface-2);
+    border: 1px solid var(--card-line);
+    border-radius: 20px;
+    padding: 6px 13px;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.lp-sort-btn:hover {
+    color: var(--card-brand);
+    border-color: color-mix(in srgb, var(--card-brand) 35%, var(--card-line));
+}
+
+.lp-sort-btn.is-active {
+    color: var(--card-brand);
+    background: var(--card-brand-soft);
+    border-color: color-mix(in srgb, var(--card-brand) 40%, transparent);
+}
+
+/* Caret from the shared component; keep it aligned inside the sort button. */
+.lp-sort-btn .caret.up {
     transform: rotate(180deg);
     transition: 0.2s ease;
 }
 
-.caret.down {
+.lp-sort-btn .caret.down {
     transform: rotate(0);
     transition: 0.2s ease;
 }
 
-/* Each column header has a unique width */
-
-.column-name {
-    width: 338px;
-}
-
-.column-wp_slug {
-    width: 200px;
-}
-
-.column-visitors {
-    width: 100px;
-}
-
-.column-conversion_rate {
-    width: 110px;
-}
-
-.column-last_published {
-    width: 130px;
-}
-
-/* Rows */
-
-.table tr:nth-child(even) {
-    background-color: #f9f9f9;
-}
-
-.table tr:nth-child(odd) {
-    background-color: #ebe9e9;
-}
-
-/* Page action links */
-
-.actions {
+/* ---------- Card list ---------- */
+.lp-cards {
     display: flex;
-    font-weight: 400;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.lp-card {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr) auto auto;
+    gap: 16px;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--card-surface);
+    border: 1px solid var(--card-line);
+    border-radius: 14px;
+    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+
+.lp-card:hover {
+    box-shadow: 0 8px 24px rgba(56, 36, 140, 0.1), 0 2px 6px rgba(56, 36, 140, 0.06);
+    border-color: color-mix(in srgb, var(--card-brand) 28%, var(--card-line));
+    transform: translateY(-1px);
+}
+
+/* ---------- Monogram tile ---------- */
+.lp-tile {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    color: #ffffff;
+    flex: 0 0 auto;
+    box-shadow: 0 1px 2px rgba(25, 19, 51, 0.08);
+    overflow: hidden;
+}
+
+.lp-tile svg {
+    width: 24px;
+    height: 24px;
+}
+
+.lp-tile-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.lp-tile-nova {
+    background: linear-gradient(140deg, var(--card-brand), var(--card-violet));
+}
+
+.lp-tile-classic {
+    background: linear-gradient(140deg, #8e88ac, #b4aecf);
+}
+
+/* ---------- Meta ---------- */
+.lp-card-meta {
+    min-width: 0;
+}
+
+.lp-card-name {
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+    color: var(--card-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lp-card-subrow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
     margin-top: 5px;
+}
+
+.lp-card-url {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    font-size: 12.5px;
+    color: var(--card-ink-2);
+    text-decoration: none;
+    background: var(--card-surface-2);
+    border: 1px solid var(--card-line);
+    padding: 3px 9px;
+    border-radius: 7px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lp-card-url:hover {
+    color: var(--card-brand);
+    border-color: color-mix(in srgb, var(--card-brand) 35%, var(--card-line));
+}
+
+.lp-card-url svg {
+    width: 12px;
+    height: 12px;
+    color: var(--card-ink-3);
+    flex: 0 0 auto;
+}
+
+.lp-card-pills {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+}
+
+.lp-pill {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 3px 9px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.lp-led {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.lp-pill-live {
+    background: var(--card-good-soft);
+    color: var(--card-good);
+}
+
+.lp-pill-live .lp-led {
+    background: var(--card-good);
+}
+
+.lp-pill-available {
+    background: var(--card-warn-soft);
+    color: var(--card-warn);
+}
+
+.lp-pill-available .lp-led {
+    background: var(--card-warn);
+}
+
+.lp-pill-nova {
+    background: var(--card-brand-soft);
+    color: var(--card-brand);
+}
+
+.lp-pill-classic {
+    background: color-mix(in srgb, var(--card-ink-3) 16%, transparent);
+    color: var(--card-ink-2);
+}
+
+.lp-card-modified {
+    font-size: 12px;
+    color: var(--card-ink-3);
+    white-space: nowrap;
+}
+
+/* ---------- Metrics ---------- */
+.lp-card-stats {
+    display: flex;
+    gap: 22px;
     align-items: center;
 }
 
-.action-link {
-    color: var(--main-blue-color);
+.lp-stat {
+    text-align: right;
     text-decoration: none;
+    color: inherit;
+    display: block;
 }
 
-.edit-link,
-.publish-link,
-.unpublish-link {
-    color: var(--main-blue-color);
-    text-decoration: none;
-    background-color: transparent;
-    border: none;
-    cursor: pointer;
-}
-.publish-link {
-    color: #008000;
-}
-.unpublish-link {
-    color: #e26f56;
-}
-.edit-link {
-    padding-left: 0;
+.lp-stat:hover .lp-stat-n {
+    color: var(--card-brand);
 }
 
-/* Handles line separators between action links */
+.lp-stat-n {
+    display: block;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--card-ink);
+    font-variant-numeric: tabular-nums;
+}
 
-.actions > a:not(:last-child)::after,
-.actions > button:not(:last-child)::after {
-    content: "|";
-    margin-left: 6px;
-    color: #757575;
-    text-decoration: none;
+.lp-stat-l {
+    display: block;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--card-ink-3);
+    margin-top: 2px;
+}
+
+/* ---------- Actions (kebab menu) ---------- */
+.lp-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+/* The DropdownMenu toggle (the vertical-dots button). */
+.lp-card-menu .components-button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 9px;
+    color: var(--card-ink-2);
+    border: 1px solid var(--card-line);
+    background: var(--card-surface);
+}
+
+.lp-card-menu .components-button:hover,
+.lp-card-menu .components-button[aria-expanded="true"] {
+    color: var(--card-brand) !important;
+    border-color: color-mix(in srgb, var(--card-brand) 35%, var(--card-line));
+    background: var(--card-brand-soft);
+}
+
+/* Menu panel + items styled after the new Leadpages (Nova) Pages dropdown:
+ * a white popover with a soft border + shadow, rounded items, and a light
+ * lavender-grey hover (Nova's --accent) that keeps the item's own text color.
+ * The menu is portaled outside .lp-pagelist, so these use literal values scoped
+ * by the popover class rather than the card tokens. */
+.lp-card-menu-popover .components-popover__content {
+    border: 1px solid #e7e2f6;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(56, 36, 140, 0.12), 0 2px 6px rgba(56, 36, 140, 0.06);
+    padding: 4px;
+    min-width: 200px;
+}
+
+.lp-card-menu-popover .components-menu-item__button {
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13.5px;
+    color: #191333;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+/* WordPress auto-focuses the first item when the menu opens and gives :focus a
+ * background, which made the top item look permanently selected. Neutralize the
+ * plain-:focus background; the highlight is driven by hover (mouse) and
+ * focus-visible (keyboard) only, so exactly one item is ever highlighted. */
+.lp-card-menu-popover .components-menu-item__button:focus {
+    background: transparent !important;
+    color: #191333 !important;
+    box-shadow: none;
+}
+
+.lp-card-menu-popover .components-menu-item__button:hover,
+.lp-card-menu-popover .components-menu-item__button:focus-visible {
+    /* !important: WordPress's own menu-item hover rule has equal specificity and
+     * would otherwise win, leaving no highlight and admin-blue text. */
+    background: #f2f1f7 !important;
+    color: #191333 !important;
+    box-shadow: none;
+}
+
+/* Publish reads primary (green), Unpublish destructive (red); kept across states. */
+.lp-card-menu-popover .components-menu-item__button.publish-link,
+.lp-card-menu-popover .components-menu-item__button.publish-link:hover,
+.lp-card-menu-popover .components-menu-item__button.publish-link:focus,
+.lp-card-menu-popover .components-menu-item__button.publish-link:focus-visible {
+    color: #0e9f6e !important;
+}
+
+.lp-card-menu-popover .components-menu-item__button.unpublish-link,
+.lp-card-menu-popover .components-menu-item__button.unpublish-link:hover,
+.lp-card-menu-popover .components-menu-item__button.unpublish-link:focus,
+.lp-card-menu-popover .components-menu-item__button.unpublish-link:focus-visible {
+    color: #b42318 !important;
+}
+
+/* ---------- Responsive ---------- */
+@media screen and (max-width: 900px) {
+    .lp-card {
+        grid-template-columns: 46px minmax(0, 1fr);
+        gap: 14px;
+    }
+
+    .lp-card-stats,
+    .lp-card-actions {
+        grid-column: 2;
+        justify-content: flex-start;
+    }
+
+    .lp-card-stats {
+        margin-top: 4px;
+    }
 }

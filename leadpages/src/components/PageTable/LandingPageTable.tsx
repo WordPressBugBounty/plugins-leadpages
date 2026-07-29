@@ -1,20 +1,22 @@
 import { useState } from '@wordpress/element';
+import { DropdownMenu, MenuGroup, MenuItem } from '@wordpress/components';
+import { moreVertical } from '@wordpress/icons';
 import { escapeHTML } from '@wordpress/escape-html';
 import Caret from '../Caret';
 import Pagination from '../Pagination';
 import { handleSortChange } from '../../utils/sorting';
-import { BUILDER_URL, LEADPAGES_URL, HOME_URL, NOVA_DASHBOARD_URL } from '../../utils/config';
+import { BUILDER_URL, LEADPAGES_URL, HOME_URL, NOVA_DASHBOARD_URL, NOVA_APP_URL } from '../../utils/config';
 import { formatDate, formatNumber, formatPercentage } from '../../utils/formatting';
 import { OrderBy, Direction } from '../../types/table';
 import { MetaData, LandingPage } from '../../types/api';
 import './landing_page_table.css';
 
 export const columnDisplayNames: Partial<Record<keyof LandingPage, string>> = {
-    name: 'PAGE NAME',
-    visitors: 'UNIQUE VISITORS',
-    conversion_rate: 'CONVERSION RATE',
-    last_published: 'LAST MODIFIED',
-    wp_slug: 'SLUG',
+    name: 'Page name',
+    visitors: 'Unique visitors',
+    conversion_rate: 'Conversion rate',
+    last_published: 'Last modified',
+    wp_slug: 'Slug',
 };
 
 export interface Props {
@@ -40,6 +42,26 @@ export const actionItemLabel = {
 const isSortableColumn = (column: keyof LandingPage): boolean => {
     return ['name', 'last_published'].includes(column);
 };
+
+const isNovaPage = (page: LandingPage): boolean => page.platform === 'nova' || page.kind === 'NovaPage';
+
+// Platform badge for the tile: a landing-page glyph for both, with an AI sparkle on the new
+// Leadpages (Nova) to distinguish it from Classic (matches the connect screen's AI motif).
+const PlatformIcon: React.FC<{ nova: boolean }> = ({ nova }) =>
+    nova ? (
+        <svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
+            <rect x="4" y="6" width="16" height="18" rx="3" stroke="currentColor" strokeWidth="2" />
+            <rect x="7" y="9" width="10" height="4" rx="1.5" fill="currentColor" />
+            <path d="M7 16.5h10M7 20h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <path d="M22.5 3l.85 2.15L25.5 6l-2.15.85L22.5 9l-.85-2.15L19.5 6l2.15-.85L22.5 3z" fill="currentColor" />
+        </svg>
+    ) : (
+        <svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
+            <rect x="5" y="4" width="18" height="20" rx="3" stroke="currentColor" strokeWidth="2" />
+            <rect x="8.5" y="7.5" width="11" height="4.5" rx="1.5" fill="currentColor" />
+            <path d="M8.5 15.5h11M8.5 19.5h7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+    );
 
 const getActionItem = (
     action: string,
@@ -108,50 +130,160 @@ const getActionItem = (
 // have null text fields (e.g. an untitled page), so coerce to a string first.
 const safeText = (value: unknown): string => escapeHTML(value == null ? '' : String(value));
 
-const generateColumnURL = (column: keyof LandingPage, page: LandingPage): string => {
+const analyticsUrl = (metric: 'unique_views' | 'conversion_rate', page: LandingPage): string => {
     const isSplitTest = page.kind === 'LeadpageSplitTestV2';
     // Nova pages link to the new Leadpages dashboard for analytics.
-    const pageAnalyticsUrl =
+    const base =
         page.platform === 'nova'
             ? NOVA_DASHBOARD_URL
             : isSplitTest
               ? `${LEADPAGES_URL}#/split-test-analytics/${page.uuid}`
               : `${LEADPAGES_URL}#/pages/${page.uuid}/analytics/`;
-
-    switch (column) {
-        case 'wp_slug':
-            return HOME_URL + '/' + page.wp_slug;
-        case 'visitors':
-            return `${pageAnalyticsUrl}?metric=unique_views`;
-        case 'conversion_rate':
-            return `${pageAnalyticsUrl}?metric=conversion_rate`;
-        default:
-            return '';
-    }
+    return `${base}?metric=${metric}`;
 };
 
-const generateActionItems = (
-    actions: string[],
-    page: LandingPage,
-    onAction: (action: string, page: LandingPage) => void
-) => {
-    return actions.map((action, actionIndex) => {
-        const { label, url, type, className, handler } = getActionItem(action, page, onAction);
-        if (type === 'link') {
-            return (
-                <a key={actionIndex} href={url} className={className} target="_blank" rel="noopener noreferrer">
-                    {label}
-                </a>
-            );
-        } else if (type === 'function') {
-            return (
-                <button key={actionIndex} onClick={handler} className={className}>
-                    {label}
-                </button>
-            );
-        }
-        return null;
-    });
+const PageCard: React.FC<{
+    page: LandingPage;
+    columns: Array<keyof LandingPage>;
+    actions: string[];
+    onAction: (action: string, page: LandingPage) => void;
+}> = ({ page, columns, actions, onAction }) => {
+    const nova = isNovaPage(page);
+    const [thumbFailed, setThumbFailed] = useState(false);
+    // New-Leadpages (Nova) pages have a real page thumbnail served from the public, cached
+    // /api/thumbnails/{id} endpoint (the same source the Leadpages dashboard uses). It returns 404
+    // when a page has no thumbnail, so the onError handler falls back to the platform icon. Classic
+    // pages live in a different backend with no such image and always use the icon.
+    const thumbUrl =
+        nova && page.nova_page_id
+            ? `${NOVA_APP_URL}/api/thumbnails/${encodeURIComponent(page.nova_page_id)}`
+            : null;
+    const live = Boolean(page.wp_slug);
+    const showSlug = columns.includes('wp_slug') && live;
+    const showVisitors = columns.includes('visitors');
+    const showConversion = columns.includes('conversion_rate');
+    const showModified = columns.includes('last_published');
+
+    return (
+        <div className="lp-card">
+            <div className={`lp-tile ${nova ? 'lp-tile-nova' : 'lp-tile-classic'}`} aria-hidden="true">
+                {thumbUrl && !thumbFailed ? (
+                    <img
+                        className="lp-tile-img"
+                        src={thumbUrl}
+                        alt=""
+                        loading="lazy"
+                        onError={() => setThumbFailed(true)}
+                    />
+                ) : (
+                    <PlatformIcon nova={nova} />
+                )}
+            </div>
+
+            <div className="lp-card-meta">
+                <div className="lp-card-name">{safeText(page.name)}</div>
+
+                <div className="lp-card-subrow">
+                    {showSlug && (
+                        <a
+                            className="lp-card-url"
+                            href={HOME_URL + '/' + page.wp_slug}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                <path d="M4 12h16M14 6l6 6-6 6" />
+                            </svg>
+                            /{safeText(page.wp_slug)}
+                        </a>
+                    )}
+
+                    <div className="lp-card-pills">
+                        <span className={`lp-pill ${live ? 'lp-pill-live' : 'lp-pill-available'}`}>
+                            <span className="lp-led" />
+                            {live ? 'Live' : 'Available'}
+                        </span>
+                        <span className={`lp-pill ${nova ? 'lp-pill-nova' : 'lp-pill-classic'}`}>
+                            {nova ? 'New Leadpages' : 'Classic'}
+                        </span>
+                    </div>
+
+                    {showModified && page.last_published && (
+                        <span className="lp-card-modified">Last modified {formatDate(page.last_published)}</span>
+                    )}
+                </div>
+            </div>
+
+            {(showVisitors || showConversion) && (
+                <div className="lp-card-stats">
+                    {showVisitors && (
+                        <a
+                            className="lp-stat"
+                            href={analyticsUrl('unique_views', page)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <span className="lp-stat-n">{formatNumber(page.visitors)}</span>
+                            <span className="lp-stat-l">Unique visitors</span>
+                        </a>
+                    )}
+                    {showConversion && (
+                        <a
+                            className="lp-stat"
+                            href={analyticsUrl('conversion_rate', page)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <span className="lp-stat-n">{formatPercentage(page.conversion_rate)}</span>
+                            <span className="lp-stat-l">Conversion rate</span>
+                        </a>
+                    )}
+                </div>
+            )}
+
+            <div className="lp-card-actions">
+                <DropdownMenu
+                    className="lp-card-menu"
+                    icon={moreVertical}
+                    label="Page actions"
+                    popoverProps={{ className: 'lp-card-menu-popover', placement: 'bottom-end' }}
+                >
+                    {({ onClose }) => (
+                        <MenuGroup>
+                            {actions.map((action) => {
+                                const { label, url, type, handler, className } = getActionItem(
+                                    action,
+                                    page,
+                                    onAction
+                                );
+                                return (
+                                    <MenuItem
+                                        key={action}
+                                        className={className}
+                                        onClick={() => {
+                                            if (type === 'link') {
+                                                // Guard against an empty URL (e.g. a View action on a
+                                                // page with no published_url), which would otherwise
+                                                // open a blank about:blank tab.
+                                                if (url) {
+                                                    window.open(url, '_blank', 'noopener,noreferrer');
+                                                }
+                                            } else {
+                                                handler?.();
+                                            }
+                                            onClose();
+                                        }}
+                                    >
+                                        {label}
+                                    </MenuItem>
+                                );
+                            })}
+                        </MenuGroup>
+                    )}
+                </DropdownMenu>
+            </div>
+        </div>
+    );
 };
 
 const LandingPageTable: React.FC<Props> = ({
@@ -171,101 +303,50 @@ const LandingPageTable: React.FC<Props> = ({
         handleSortChange(column, direction, onSortChange, setShowCaret);
     };
 
-    const renderColumnData = (column: keyof LandingPage, page: LandingPage) => {
-        const url = generateColumnURL(column, page);
-
-        switch (column) {
-            case 'name':
-                return (
-                    <>
-                        <div className="page-name">{safeText(page[column])}</div>
-                        <div className="actions">{generateActionItems(actions, page, onAction)}</div>
-                    </>
-                );
-            case 'last_published':
-                return <>{formatDate(page[column])}</>;
-            case 'visitors':
-                return (
-                    <a
-                        key={`${column}-${page.uuid}`}
-                        href={url}
-                        className="action-link"
-                        target="_blank"
-                        rel="noreferrer"
-                    >
-                        {formatNumber(page[column])}
-                    </a>
-                );
-            case 'conversion_rate':
-                return (
-                    <a
-                        key={`${column}-${page.uuid}`}
-                        href={url}
-                        className="action-link"
-                        target="_blank"
-                        rel="noreferrer"
-                    >
-                        {formatPercentage(page[column])}
-                    </a>
-                );
-            case 'wp_slug':
-                return (
-                    <a
-                        key={`${column}-${page.uuid}`}
-                        href={url}
-                        className="action-link"
-                        target="_blank"
-                        rel="noreferrer"
-                    >
-                        <div className="page-wp_slug">/{safeText(page[column])}</div>
-                    </a>
-                );
-            default:
-                return safeText(page[column]);
-        }
-    };
+    const sortableColumns = columns.filter(isSortableColumn);
 
     return (
-        <>
+        <div className="lp-pagelist">
+            {sortableColumns.length > 0 && (
+                <div className="lp-sortbar">
+                    <span className="lp-sortbar-label">Sort by</span>
+                    {sortableColumns.map((column) => {
+                        const isActive = sortData.orderBy === column;
+                        const directionText = sortData.direction === 'asc' ? 'ascending' : 'descending';
+                        return (
+                            <button
+                                key={column}
+                                className={`lp-sort-btn ${isActive ? 'is-active' : ''}`}
+                                onClick={() => handleColumnSort(column)}
+                                aria-pressed={isActive}
+                                aria-label={
+                                    isActive
+                                        ? `Sort by ${columnDisplayNames[column]}, ${directionText}`
+                                        : `Sort by ${columnDisplayNames[column]}`
+                                }
+                            >
+                                {columnDisplayNames[column]}
+                                {showCaret && isActive && <Caret up={sortData.direction === 'asc'} />}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            <div className="lp-cards">
+                {pages.map((page, index) => (
+                    <PageCard
+                        key={page.uuid || index}
+                        page={page}
+                        columns={columns}
+                        actions={actions}
+                        onAction={onAction}
+                    />
+                ))}
+            </div>
+
             <Pagination metaData={pagination} onPage={onPagination} />
-            <table className="table">
-                {/* Table header display */}
-                <thead>
-                    <tr>
-                        {columns.map((column, index) => {
-                            return (
-                                <th key={index} className={`column-header column-${column}`}>
-                                    {isSortableColumn(column) ? (
-                                        // Render sortable column headers as a button with Caret
-                                        <button className="sortable-header" onClick={() => handleColumnSort(column)}>
-                                            {columnDisplayNames[column]}
-                                            {showCaret && sortData.orderBy === column && (
-                                                <Caret up={sortData.direction === 'asc'} />
-                                            )}
-                                        </button>
-                                    ) : (
-                                        // Render other column headers normally
-                                        columnDisplayNames[column]
-                                    )}
-                                </th>
-                            );
-                        })}
-                    </tr>
-                </thead>
-                {/* Data display in table */}
-                <tbody>
-                    {pages.map((page, index) => (
-                        <tr key={index}>
-                            {columns.map((column, columnIndex) => (
-                                <td key={columnIndex} className="table-data">
-                                    {renderColumnData(column, page)}
-                                </td>
-                            ))}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </>
+        </div>
     );
 };
 
