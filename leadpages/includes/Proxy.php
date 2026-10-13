@@ -28,14 +28,21 @@ class Proxy {
     /** @var Client */
     private $client;
 
+    /** Output buffer level when the plugin loaded; buffers above it were opened by later hooks. */
+    private $base_buffer_level;
+
     /** The serving-tag meta value injected into the current response (set per request in render). */
     private static $serving_tag = 'wordpress-official';
 
     /** The pop-up embed <script> injected before </body> for the current response, or '' for none. */
     private static $popup_embed = '';
 
+    /** The og:url for the current response, or null to use the requested URL (set per request in serve). */
+    private static $og_url = null;
+
     public function __construct() {
         $this->client = new Client();
+        $this->base_buffer_level = ob_get_level();
     }
 
     /**
@@ -50,33 +57,89 @@ class Proxy {
      * @return void
      */
     public function serve_landing_page() {
-        $request_method = sanitize_key($_SERVER['REQUEST_METHOD']);
-        if ('get' !== $request_method) {
+        if (! $this->is_get_request()) {
             return;
         }
 
-        $start = microtime(true);
-
-        $current_url = $this->get_current_url();
+        $current_url = self::get_current_url();
         $slug = sanitize_title($this->parse_request($current_url));
 
-        $page = Page::get_by_slug($slug);
+        // The root URL resolves to an empty slug; only serve_home_page may serve it.
+        $page = '' === $slug ? null : Page::get_by_slug($slug);
         if (! $page) {
             $this->debug("Ignoring request to $current_url");
             return;
         }
 
+        $this->serve($page, $current_url);
+    }
+
+    /**
+     * Serve the page published as the WordPress homepage (wp_page_type 'home') at the site's front
+     * page URL. Runs on template_redirect, after WordPress has parsed the request and after
+     * redirect_canonical, so WordPress decides what the front page is: searches, single posts on
+     * plain permalinks (/?p=1), feeds, previews, embeds and paginated listings at the root are left
+     * to WordPress. A site set to show a static front page that is unset or no longer published has
+     * no front page in WordPress's eyes, so a bare root request (no query vars) is served too.
+     *
+     * Renders the page html and exits the current process so no other code can execute.
+     *
+     * @return void
+     */
+    public function serve_home_page() {
+        global $wp;
+        $is_root = is_front_page() || ( 'page' === get_option('show_on_front') && empty($wp->query_vars) );
+        if (
+            ! $this->is_get_request() || ! $is_root || is_paged() || is_feed() || is_embed()
+            || is_preview() || is_customize_preview()
+        ) {
+            return;
+        }
+
+        $page = Page::get_by_page_type('home');
+        if (! $page || ! $page->connected) {
+            return;
+        }
+
+        $this->serve($page, self::get_current_url());
+    }
+
+    /**
+     * @return bool
+     */
+    private function is_get_request() {
+        return isset($_SERVER['REQUEST_METHOD']) && 'get' === sanitize_key($_SERVER['REQUEST_METHOD']);
+    }
+
+    /**
+     * Serve a connected page from the cache or its PageSource, then exit. Returns without output when
+     * the page cannot be served so WordPress handles the request.
+     *
+     * @param object $page
+     * @param string $current_url
+     * @return void
+     */
+    private function serve( $page, $current_url ) {
+        $start = microtime(true);
+
         $source = $this->source_for($page);
         $cache_key = $source->cache_key($page);
 
         // The proxy exits before wp_enqueue_scripts runs, so the site-wide pop-up enqueue never fires
-        // for proxied pages. Inject the same embed here, gated by the same scope (matched on this
-        // request's slug) so a "specific pages" selection covers proxied pages too.
-        self::$popup_embed = $this->build_popup_embed($slug);
+        // for proxied pages. Inject the same embed here, gated by the same scope (matched on the
+        // page's slug) so a "specific pages" selection covers proxied pages too.
+        self::$popup_embed = $this->build_popup_embed($page->wp_slug);
+
+        // The homepage is served at both / and its slug from one cache entry, so it is always
+        // fetched as the front page URL (the canonical Nova bakes in then points at the root) and
+        // its og:url matches on both.
+        $home_url = 'home' === $page->wp_page_type ? home_url('/') : null;
+        self::$og_url = $home_url;
 
         $cached_value = Cache::get($cache_key);
         if ($cached_value) {
             $this->debug('Serving page from cache');
+            $this->prepare_home_output($home_url);
             $this->render_html($cached_value, $source);
         } else {
             // Do not serve unpublished, deleted, or split-test-variation pages.
@@ -85,7 +148,7 @@ class Proxy {
                 return;
             }
 
-            $wp_url = strtok($current_url, '?');
+            $wp_url = $home_url ?? strtok($current_url, '?');
             $this->debug("Proxying $current_url");
             $response = $this->fetch_page_html($source, $page, $wp_url);
             if (! $response) {
@@ -93,6 +156,7 @@ class Proxy {
                 return;
             }
 
+            $this->prepare_home_output($home_url);
             $this->render_html($response, $source);
 
             // Never cache a response that carries Set-Cookie: the cached copy would replay that
@@ -110,6 +174,30 @@ class Proxy {
         $this->debug("Successful served page in $time_taken ms");
 
         $this->lp_exit(0);
+    }
+
+    /**
+     * The homepage is served on template_redirect, inside output buffers that optimization plugins
+     * open after the plugin loads and after WordPress has sent its own Link and X-Pingback headers.
+     * Drop both so the root gets the same response as the page's slug, which is served on init.
+     *
+     * @param string|null $home_url set when the page being served is the homepage
+     * @return void
+     */
+    private function prepare_home_output( $home_url ) {
+        if (! $home_url) {
+            return;
+        }
+        while (ob_get_level() > $this->base_buffer_level) {
+            // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- a non-removable buffer ends the loop.
+            if (! @ob_end_clean()) {
+                break;
+            }
+        }
+        if (! headers_sent()) {
+            header_remove('Link');
+            header_remove('X-Pingback');
+        }
     }
 
     /**
@@ -188,7 +276,8 @@ class Proxy {
             $response = $this->client->get($url, $options);
         } catch (NotFoundException $e) {
             // Classic serves the Leadpages 404 page; Nova declines so it never echoes an error page.
-            $response = $source->serves_not_found() ? $e->response : null;
+            // The homepage declines too, so a deleted page leaves the site's own front page, not a 404.
+            $response = $source->serves_not_found() && 'home' !== $page->wp_page_type ? $e->response : null;
         } catch (ServerException $e) {
             $status_code = wp_remote_retrieve_response_code($e->response);
             if ($status_code >= 500 && $retry) {
@@ -336,7 +425,7 @@ class Proxy {
             return $content;
         }
 
-        $url = self::get_current_url();
+        $url = self::$og_url ?? self::get_current_url();
         $regex = '/(<meta property="og:url" content=")[^"]+(">)/';
         $html = preg_replace($regex, '${1}' . $url . '${2}', $content);
         if (null === $html) {

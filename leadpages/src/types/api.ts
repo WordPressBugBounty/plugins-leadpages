@@ -15,6 +15,8 @@ export interface LandingPage {
     published_url: string;
     uuid: string;
     wp_slug: string;
+    // 'home' when the page is also served at the site's homepage URL.
+    wp_page_type?: string | null;
     lp_slug: string;
     kind: 'LeadpageV3' | 'LeadpageSplitTestV2' | 'NovaPage';
     // Present on rows synced from the new Leadpages (Nova) platform.

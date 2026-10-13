@@ -3,7 +3,7 @@ Tags: landing page, lead generation, leadpages, form builder, sales page
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -116,6 +116,10 @@ No! Leadpages does not put a limit on your leads so collect as many as you like.
 6. Migrate from Classic to the new Leadpages while keeping the same URL.
 
 == Changelog ==
+
+= 1.4.0 =
+* Release Date: 10/12/2026
+- New: Use a published Leadpages page as your WordPress homepage. Check "Use as my homepage" when publishing, and the page is also served at your site's homepage URL in place of your WordPress homepage. Unpublishing it restores your WordPress homepage.
 
 = 1.3.0 =
 * Release Date: 07/29/2026

@@ -37,7 +37,8 @@ class Page extends ModelBase {
      *   - updated_at       - date the page was last updated on the Leadpages platform
      *   - deleted_at       - date the page was deleted from Leadpages
      *   - connected        - whether or not the landing page is being served through WordPress
-     *   - wp_page_type     - identifies how the page should be served in WordPress (not currently in use)
+     *   - wp_page_type     - identifies how the page should be served in WordPress. 'home' also serves
+     *                        the page at the site's front page URL
      *   - wp_slug          - slug the page is connected under in WordPress
      *   - platform         - which Leadpages backend the row belongs to ('classic' | 'nova'). Defaults to
      *                        'classic' so pre-existing rows are unaffected.
@@ -172,6 +173,29 @@ class Page extends ModelBase {
     }
 
     /**
+     * Make the page published under the empty slug (served at the site root before 1.4.0) the
+     * homepage, unless the site already has one.
+     *
+     * @return void
+     * @throws DatabaseError
+     */
+    public static function adopt_root_slug_as_home() {
+        global $wpdb;
+        if (self::get_by_page_type('home')) {
+            return;
+        }
+        $wpdb->update(
+            $wpdb->prefix . self::table_name,
+            [ 'wp_page_type' => 'home' ],
+            [
+                'wp_slug'   => '',
+                'connected' => 1,
+            ]
+        );
+        self::throw_on_db_error();
+    }
+
+    /**
      * Prepare raw landing page data from a foundry request for the database
      *
      * @param object $data should be raw landing page data from foundry
@@ -235,7 +259,7 @@ class Page extends ModelBase {
             // "Invalid Date": prefer updatedAt, fall back to publishedAt.
             'last_published'  => isset($data->updatedAt)
                 ? $data->updatedAt
-                : (isset($data->publishedAt) ? $data->publishedAt : null),
+                : ( isset($data->publishedAt) ? $data->publishedAt : null ),
             // A page returned by the sync is live, so clear any previous deletion marker.
             'deleted_at'      => null,
         ];
@@ -348,6 +372,26 @@ class Page extends ModelBase {
                 // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
                 'SELECT * FROM ' . $wpdb->prefix . self::table_name . ' WHERE connected = 1 AND wp_slug = %s',
                 $slug
+            )
+        );
+
+        return $result;
+    }
+
+    /**
+     * Retrieve the page holding a WordPress page type (wp_page_type is UNIQUE, so at most one)
+     *
+     * @param string $type
+     * @return object|null the landing page data or null if not found
+     */
+    public static function get_by_page_type( $type ) {
+        global $wpdb;
+
+        $result = $wpdb->get_row(
+            $wpdb->prepare(
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+                'SELECT * FROM ' . $wpdb->prefix . self::table_name . ' WHERE wp_page_type = %s',
+                $type
             )
         );
 

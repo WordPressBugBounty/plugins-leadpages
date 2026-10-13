@@ -69,6 +69,8 @@ class Core {
      */
     public function run() {
         add_action('init', [ $this->get_proxy(), 'serve_landing_page' ], 1);
+        // After redirect_canonical (priority 10), so the homepage is only served on the canonical host.
+        add_action('template_redirect', [ $this->get_proxy(), 'serve_home_page' ], 11);
         add_action('init', [ $this, 'init' ]);
         add_action('rest_api_init', [ $this->get_service(), 'rest_api_init' ]);
 

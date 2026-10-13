@@ -25,6 +25,7 @@ class DB {
         '1.0.0',
         '1.2.0',
         '1.2.3',
+        '1.4.0',
         // versions must be ordered from oldest to newest - top to bottom
     ];
 
@@ -131,5 +132,17 @@ class DB {
      */
     private function v1_2_3() {
         Page::widen_long_text_columns();
+    }
+
+    /**
+     * Database version 1.4.0. Before 1.4.0 a page published under a slug that sanitizes to ""
+     * (e.g. "-") was served at the site root. The root is now served only for the homepage page
+     * type, so make that page the homepage to keep it serving there. wp_slug is UNIQUE, so there is
+     * at most one such page.
+     *
+     * @returns void
+     */
+    private function v1_4_0() {
+        Page::adopt_root_slug_as_home();
     }
 }

@@ -1,5 +1,5 @@
 import { useState } from '@wordpress/element';
-import { Modal, Button } from '@wordpress/components';
+import { Modal, Button, CheckboxControl } from '@wordpress/components';
 import apiFetch from '@wordpress/api-fetch';
 
 import NoticeManager from '../NoticeManager';
@@ -19,6 +19,7 @@ export interface Props {
 
 const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onPublish }: Props) => {
     const [slug, setSlug] = useState(page.wp_slug ?? page.lp_slug ?? '');
+    const [isHome, setIsHome] = useState(page.wp_page_type === 'home');
     const [loading, setLoading] = useState(false);
     const [cacheClearSuccess, setCacheClearSuccess] = useState(false);
     const [notice, setNotice] = useState<{ show: boolean; messages: string[] }>({ show: false, messages: [] });
@@ -28,6 +29,10 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
         setSlug(e.target.value);
         // The conflict is specific to a slug, so a new slug clears any pending replace prompt.
         setReplaceConflict(null);
+    };
+
+    const handleHomeChange = (checked: boolean) => {
+        setIsHome(checked);
     };
 
     const handleDismissNotice = () => {
@@ -52,7 +57,7 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
                 data: {
                     slug,
                     published: true, // this only manages published pages
-                    pageType: null, // we don't support specific page types yet
+                    pageType: isHome ? 'home' : null,
                     replace, // replace a page from either platform already at this slug
                 },
             });
@@ -118,6 +123,15 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
                     <input onChange={handleInput} value={slug} />
                 </div>
             </div>
+            <hr className="modal-section-break" />
+            <div className="modal-section">
+                <CheckboxControl
+                    label="Use as my homepage"
+                    help={`Also serve this page at ${HOME_URL}/ in place of your WordPress homepage. Replaces any other Leadpages page set as the homepage.`}
+                    checked={isHome}
+                    onChange={handleHomeChange}
+                />
+            </div>
             {variant === 'edit' && (
                 <>
                     <hr className="modal-section-break" />
@@ -145,8 +159,7 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
                     </Button>
                 </div>
             )}
-            {/* Add a little extra padding to the publish modal only. We can remove this when we add page types. */}
-            <div className={variant === 'publish' ? 'modal-actions modal-action-padding' : 'modal-actions'}>
+            <div className="modal-actions">
                 <Button variant="tertiary" onClick={onClose}>
                     Cancel
                 </Button>

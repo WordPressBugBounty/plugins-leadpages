@@ -231,6 +231,18 @@ class Controller extends \WP_REST_Controller {
         $type = $request->get_param('pageType');
         $replace = $request->get_param('replace');
 
+        // A slug like "-" passes validation but sanitizes to "", which would bind the page to no URL.
+        if ('' === $slug) {
+            return new \WP_Error('rest_invalid_param', 'Provided slug must not be empty', [ 'status' => 400 ]);
+        }
+        if ('home' === $type && ( ! $slug || ! $connected )) {
+            return new \WP_Error(
+                'rest_invalid_param',
+                'A homepage must be published under a slug',
+                [ 'status' => 400 ]
+            );
+        }
+
         try {
             $page = Page::get($id);
             if (!$page) {
@@ -277,6 +289,25 @@ class Controller extends \WP_REST_Controller {
                 }
             }
 
+            // Replacing the homepage at its slug keeps it the homepage, like the URL it hands off.
+            if ($handoff_page && $connected && 'home' === $handoff_page->wp_page_type) {
+                $type = 'home';
+            }
+
+            // wp_page_type is UNIQUE, so the current homepage must give up the type before this page
+            // can take it. It keeps its slug and stays published there.
+            $previous_home = null;
+            if ('home' === $type) {
+                $home = Page::get_by_page_type('home');
+                if (
+                    $home
+                    && (int) $home->id !== (int) $page->id
+                    && ( ! $handoff_page || (int) $handoff_page->id !== (int) $home->id )
+                ) {
+                    $previous_home = $home;
+                }
+            }
+
             $data = [
                 'wp_slug'      => $slug,
                 'connected'    => $connected,
@@ -299,10 +330,25 @@ class Controller extends \WP_REST_Controller {
                     ]
                 );
             }
+            if ($previous_home) {
+                Page::update((int) $previous_home->id, [ 'wp_page_type' => null ]);
+            }
 
             try {
                 Page::update($id, $data);
             } catch (\Throwable $rebind_error) {
+                if ($previous_home) {
+                    // Compensate: the site keeps its homepage when this page could not take it.
+                    try {
+                        Page::update((int) $previous_home->id, [ 'wp_page_type' => 'home' ]);
+                    } catch (\Throwable $restore_error) {
+                        $this->debug(
+                            'Failed to restore the previous homepage after a re-bind failure: '
+                                . $restore_error->getMessage(),
+                            __METHOD__
+                        );
+                    }
+                }
                 if ($handoff_page) {
                     // Compensate: give the slug back to the page we just unpublished.
                     try {
@@ -335,6 +381,19 @@ class Controller extends \WP_REST_Controller {
                         ]
                     );
                 }
+                // Likewise a concurrent request may have just made another page the homepage.
+                $home = 'home' === $type ? Page::get_by_page_type('home') : null;
+                if (
+                    $home
+                    && (int) $home->id !== (int) $id
+                    && ( ! $previous_home || (int) $home->id !== (int) $previous_home->id )
+                ) {
+                    return new \WP_Error(
+                        'home_taken_by_page',
+                        'Another page was just set as the homepage',
+                        [ 'status' => 409 ]
+                    );
+                }
                 throw $rebind_error;
             }
 
@@ -342,6 +401,10 @@ class Controller extends \WP_REST_Controller {
             // never leaves its URL both uncached and unbound (serving nothing).
             if ($handoff_page) {
                 Cache::delete($this->page_cache_key($handoff_page));
+            }
+            // Its cached copy was fetched as the front page URL; refetch it under its own slug.
+            if ($previous_home) {
+                Cache::delete($this->page_cache_key($previous_home));
             }
         } catch (DatabaseError $e) {
             return new \WP_Error('lp_wp_error', 'Could not update page', [ 'status' => 500 ]);
@@ -352,8 +415,9 @@ class Controller extends \WP_REST_Controller {
 
         // When the page is being unpublished in WordPress or the slug that the page is
         // connected under is changed, any cached data for that page needs to be cleared.
-        // Otherwise the page would continue to be served under the old slug.
-        if (false === $connected || $slug !== $page->wp_slug) {
+        // Otherwise the page would continue to be served under the old slug. A page type change
+        // also changes the URL the page is fetched as (the front page URL for the homepage).
+        if (false === $connected || $slug !== $page->wp_slug || $type !== $page->wp_page_type) {
             Cache::delete($this->page_cache_key($page));
         }
 
