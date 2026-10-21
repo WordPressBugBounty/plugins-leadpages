@@ -242,6 +242,13 @@ class Controller extends \WP_REST_Controller {
                 [ 'status' => 400 ]
             );
         }
+        if ('404' === $type && ( ! $slug || ! $connected )) {
+            return new \WP_Error(
+                'rest_invalid_param',
+                'A 404 page must be published under a slug',
+                [ 'status' => 400 ]
+            );
+        }
 
         try {
             $page = Page::get($id);
@@ -276,9 +283,11 @@ class Controller extends \WP_REST_Controller {
                             'slug_taken_by_page',
                             $message,
                             [
-                                'status'          => 409,
-                                'conflictingName' => $conflicting_page->name,
-                                'slug'            => $slug,
+                                'status'              => 409,
+                                'conflictingName'     => $conflicting_page->name,
+                                // The UI warns when replacing it would take the homepage or 404 role away.
+                                'conflictingPageType' => $conflicting_page->wp_page_type,
+                                'slug'                => $slug,
                             ]
                         );
                     }
@@ -289,22 +298,27 @@ class Controller extends \WP_REST_Controller {
                 }
             }
 
-            // Replacing the homepage at its slug keeps it the homepage, like the URL it hands off.
-            if ($handoff_page && $connected && 'home' === $handoff_page->wp_page_type) {
+            // Replacing the homepage at its slug keeps it the homepage, like the URL it hands off,
+            // unless this page is being made the 404 page instead.
+            if ($handoff_page && $connected && '404' !== $type && 'home' === $handoff_page->wp_page_type) {
                 $type = 'home';
             }
+            // Likewise for the 404 page, unless this page is being given a type of its own.
+            if ($handoff_page && $connected && null === $type && '404' === $handoff_page->wp_page_type) {
+                $type = '404';
+            }
 
-            // wp_page_type is UNIQUE, so the current homepage must give up the type before this page
-            // can take it. It keeps its slug and stays published there.
-            $previous_home = null;
-            if ('home' === $type) {
-                $home = Page::get_by_page_type('home');
+            // wp_page_type is UNIQUE, so the current homepage (or 404 page) must give up the type
+            // before this page can take it. It keeps its slug and stays published there.
+            $previous_holder = null;
+            if ('home' === $type || '404' === $type) {
+                $holder = Page::get_by_page_type($type);
                 if (
-                    $home
-                    && (int) $home->id !== (int) $page->id
-                    && ( ! $handoff_page || (int) $handoff_page->id !== (int) $home->id )
+                    $holder
+                    && (int) $holder->id !== (int) $page->id
+                    && ( ! $handoff_page || (int) $handoff_page->id !== (int) $holder->id )
                 ) {
-                    $previous_home = $home;
+                    $previous_holder = $holder;
                 }
             }
 
@@ -330,20 +344,19 @@ class Controller extends \WP_REST_Controller {
                     ]
                 );
             }
-            if ($previous_home) {
-                Page::update((int) $previous_home->id, [ 'wp_page_type' => null ]);
-            }
-
             try {
+                if ($previous_holder) {
+                    Page::update((int) $previous_holder->id, [ 'wp_page_type' => null ]);
+                }
                 Page::update($id, $data);
             } catch (\Throwable $rebind_error) {
-                if ($previous_home) {
-                    // Compensate: the site keeps its homepage when this page could not take it.
+                if ($previous_holder) {
+                    // Compensate: the site keeps its homepage (or 404 page) when this page could not take it.
                     try {
-                        Page::update((int) $previous_home->id, [ 'wp_page_type' => 'home' ]);
+                        Page::update((int) $previous_holder->id, [ 'wp_page_type' => $type ]);
                     } catch (\Throwable $restore_error) {
                         $this->debug(
-                            'Failed to restore the previous homepage after a re-bind failure: '
+                            'Failed to restore the previous page type holder after a re-bind failure: '
                                 . $restore_error->getMessage(),
                             __METHOD__
                         );
@@ -381,18 +394,20 @@ class Controller extends \WP_REST_Controller {
                         ]
                     );
                 }
-                // Likewise a concurrent request may have just made another page the homepage.
-                $home = 'home' === $type ? Page::get_by_page_type('home') : null;
+                // Likewise a concurrent request may have just made another page the homepage (or 404 page).
+                $holder = 'home' === $type || '404' === $type ? Page::get_by_page_type($type) : null;
                 if (
-                    $home
-                    && (int) $home->id !== (int) $id
-                    && ( ! $previous_home || (int) $home->id !== (int) $previous_home->id )
+                    $holder
+                    && (int) $holder->id !== (int) $id
+                    && ( ! $previous_holder || (int) $holder->id !== (int) $previous_holder->id )
                 ) {
-                    return new \WP_Error(
-                        'home_taken_by_page',
-                        'Another page was just set as the homepage',
-                        [ 'status' => 409 ]
-                    );
+                    return 'home' === $type
+                        ? new \WP_Error('home_taken_by_page', 'Another page was just set as the homepage', [ 'status' => 409 ])
+                        : new \WP_Error(
+                            'not_found_page_taken_by_page',
+                            'Another page was just set as the 404 page',
+                            [ 'status' => 409 ]
+                        );
                 }
                 throw $rebind_error;
             }
@@ -402,9 +417,9 @@ class Controller extends \WP_REST_Controller {
             if ($handoff_page) {
                 Cache::delete($this->page_cache_key($handoff_page));
             }
-            // Its cached copy was fetched as the front page URL; refetch it under its own slug.
-            if ($previous_home) {
-                Cache::delete($this->page_cache_key($previous_home));
+            // Its cached copy was fetched as its fixed URL; refetch it under its own slug.
+            if ($previous_holder) {
+                Cache::delete($this->page_cache_key($previous_holder));
             }
         } catch (DatabaseError $e) {
             return new \WP_Error('lp_wp_error', 'Could not update page', [ 'status' => 500 ]);
@@ -416,7 +431,8 @@ class Controller extends \WP_REST_Controller {
         // When the page is being unpublished in WordPress or the slug that the page is
         // connected under is changed, any cached data for that page needs to be cleared.
         // Otherwise the page would continue to be served under the old slug. A page type change
-        // also changes the URL the page is fetched as (the front page URL for the homepage).
+        // also changes the URL the page is fetched as (the front page URL for the homepage, the
+        // slug URL for the 404 page).
         if (false === $connected || $slug !== $page->wp_slug || $type !== $page->wp_page_type) {
             Cache::delete($this->page_cache_key($page));
         }

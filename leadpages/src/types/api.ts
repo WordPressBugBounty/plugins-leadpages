@@ -15,7 +15,8 @@ export interface LandingPage {
     published_url: string;
     uuid: string;
     wp_slug: string;
-    // 'home' when the page is also served at the site's homepage URL.
+    // 'home' when the page is also served at the site's homepage URL, '404' when it is also served
+    // in place of the theme's "not found" page.
     wp_page_type?: string | null;
     lp_slug: string;
     kind: 'LeadpageV3' | 'LeadpageSplitTestV2' | 'NovaPage';
@@ -66,6 +67,8 @@ export interface WPResponseError {
     message: string;
     data: {
         status: number;
+        // slug_taken_by_page: the WordPress page type ('home' or '404') of the page holding the slug
+        conflictingPageType?: 'home' | '404' | null;
         params: {
             [key: string]: string;
         };

@@ -105,6 +105,42 @@ class Proxy {
     }
 
     /**
+     * Serve the page published as the site's 404 page (wp_page_type '404') in place of the theme's
+     * "not found" template, with a 404 status. Runs on template_redirect, after redirect_canonical,
+     * so WordPress has already decided the request matches nothing (and has tried its own redirect
+     * guesses first). Falls through to the theme when the page cannot be served.
+     *
+     * Renders the page html and exits the current process so no other code can execute.
+     *
+     * @return void
+     */
+    public function serve_not_found_page() {
+        if (! $this->is_get_request() || ! is_404()) {
+            return;
+        }
+
+        // A 404 page is always published under a slug, which it is fetched as; the API accepted the
+        // type without one before 1.5.0, so a row set that way is left to the theme.
+        $page = Page::get_by_page_type('404');
+        if (! $page || ! $page->connected || ! $page->wp_slug) {
+            return;
+        }
+
+        // Bot scans make missing URLs steady traffic. When the page cannot be fetched (deleted in
+        // Leadpages, upstream down) nothing is cached, so remember the miss briefly rather than hold a
+        // PHP worker on an upstream timeout for every one of them.
+        $unavailable_key = 'leadpages_404_page_unavailable_' . $page->id;
+        if (Cache::get($unavailable_key)) {
+            return;
+        }
+
+        $this->serve($page, self::get_current_url(), 404);
+
+        // serve() exits once it has served the page, so reaching here means it declined.
+        Cache::set($unavailable_key, 1, MINUTE_IN_SECONDS);
+    }
+
+    /**
      * @return bool
      */
     private function is_get_request() {
@@ -117,9 +153,10 @@ class Proxy {
      *
      * @param object $page
      * @param string $current_url
+     * @param int|null $status the status to respond with instead of the upstream one
      * @return void
      */
-    private function serve( $page, $current_url ) {
+    private function serve( $page, $current_url, $status = null ) {
         $start = microtime(true);
 
         $source = $this->source_for($page);
@@ -130,17 +167,18 @@ class Proxy {
         // page's slug) so a "specific pages" selection covers proxied pages too.
         self::$popup_embed = $this->build_popup_embed($page->wp_slug);
 
-        // The homepage is served at both / and its slug from one cache entry, so it is always
-        // fetched as the front page URL (the canonical Nova bakes in then points at the root) and
-        // its og:url matches on both.
-        $home_url = 'home' === $page->wp_page_type ? home_url('/') : null;
-        self::$og_url = $home_url;
+        // The homepage and the 404 page are served at more than one URL from one cache entry, so
+        // each is always fetched as one fixed URL (the canonical Nova bakes in then points there)
+        // and its og:url matches on all of them: the front page URL for the homepage, the page's
+        // own slug for the 404 page, never the missing URL a visitor happened to request.
+        $fixed_url = $this->fixed_url($page);
+        self::$og_url = $fixed_url;
 
         $cached_value = Cache::get($cache_key);
         if ($cached_value) {
             $this->debug('Serving page from cache');
-            $this->prepare_home_output($home_url);
-            $this->render_html($cached_value, $source);
+            $this->prepare_fixed_url_output($fixed_url);
+            $this->render_html($cached_value, $source, $status);
         } else {
             // Do not serve unpublished, deleted, or split-test-variation pages.
             if (! $page->current_edition || ! $page->connected || $page->deleted_at || $page->split_test) {
@@ -148,7 +186,7 @@ class Proxy {
                 return;
             }
 
-            $wp_url = $home_url ?? strtok($current_url, '?');
+            $wp_url = $fixed_url ?? strtok($current_url, '?');
             $this->debug("Proxying $current_url");
             $response = $this->fetch_page_html($source, $page, $wp_url);
             if (! $response) {
@@ -156,8 +194,8 @@ class Proxy {
                 return;
             }
 
-            $this->prepare_home_output($home_url);
-            $this->render_html($response, $source);
+            $this->prepare_fixed_url_output($fixed_url);
+            $this->render_html($response, $source, $status);
 
             // Never cache a response that carries Set-Cookie: the cached copy would replay that
             // same cookie value to every visitor served from cache (a shared-identity vector).
@@ -177,15 +215,33 @@ class Proxy {
     }
 
     /**
-     * The homepage is served on template_redirect, inside output buffers that optimization plugins
-     * open after the plugin loads and after WordPress has sent its own Link and X-Pingback headers.
-     * Drop both so the root gets the same response as the page's slug, which is served on init.
+     * The fixed URL a page with a WordPress page type is always fetched as, or null to fetch a page
+     * as the URL being requested.
      *
-     * @param string|null $home_url set when the page being served is the homepage
+     * @param object $page
+     * @return string|null
+     */
+    private function fixed_url( $page ) {
+        if ('home' === $page->wp_page_type) {
+            return home_url('/');
+        }
+        if ('404' === $page->wp_page_type) {
+            return home_url(user_trailingslashit($page->wp_slug));
+        }
+        return null;
+    }
+
+    /**
+     * The homepage and the 404 page are served on template_redirect, inside output buffers that
+     * optimization plugins open after the plugin loads and after WordPress has sent its own Link and
+     * X-Pingback headers. Drop both so those URLs get the same response as the page's slug, which is
+     * served on init.
+     *
+     * @param string|null $fixed_url set when the page being served has a WordPress page type
      * @return void
      */
-    private function prepare_home_output( $home_url ) {
-        if (! $home_url) {
+    private function prepare_fixed_url_output( $fixed_url ) {
+        if (! $fixed_url) {
             return;
         }
         while (ob_get_level() > $this->base_buffer_level) {
@@ -276,8 +332,9 @@ class Proxy {
             $response = $this->client->get($url, $options);
         } catch (NotFoundException $e) {
             // Classic serves the Leadpages 404 page; Nova declines so it never echoes an error page.
-            // The homepage declines too, so a deleted page leaves the site's own front page, not a 404.
-            $response = $source->serves_not_found() && 'home' !== $page->wp_page_type ? $e->response : null;
+            // The homepage and the 404 page decline too, so a deleted page leaves the site's own
+            // front page or "not found" template.
+            $response = $source->serves_not_found() && ! $this->fixed_url($page) ? $e->response : null;
         } catch (ServerException $e) {
             $status_code = wp_remote_retrieve_response_code($e->response);
             if ($status_code >= 500 && $retry) {
@@ -294,20 +351,20 @@ class Proxy {
 
     /**
      * Render HTML from an HTTP response object to the page with the same status code as the response
-     * and mirror the source's cookies back to the visitor.
+     * (unless overridden) and mirror the source's cookies back to the visitor.
      *
      * @param array $response
      * @param PageSource $source
+     * @param int|null $status the status to respond with instead of the upstream one
      */
-    public function render_html( $response, $source ) {
+    public function render_html( $response, $source, $status = null ) {
         if (ob_get_length() > 0) {
             ob_clean();
         }
 
         $html = $response['body'];
-        $status = wp_remote_retrieve_response_code($response);
 
-        status_header($status);
+        status_header($status ?? wp_remote_retrieve_response_code($response));
         foreach ($source->cookies_to_mirror($response) as $cookie) {
             // Mirror on the WordPress host with a site-wide path so per-visitor experiment /
             // personalization cookies are sent on every page (not just the proxied slug's

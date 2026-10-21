@@ -204,6 +204,7 @@ const PageCard: React.FC<{
                             {live ? 'Live' : 'Available'}
                         </span>
                         {live && page.wp_page_type === 'home' && <span className="lp-pill lp-pill-home">Homepage</span>}
+                        {live && page.wp_page_type === '404' && <span className="lp-pill lp-pill-home">404 page</span>}
                         <span className={`lp-pill ${nova ? 'lp-pill-nova' : 'lp-pill-classic'}`}>
                             {nova ? 'New Leadpages' : 'Classic'}
                         </span>

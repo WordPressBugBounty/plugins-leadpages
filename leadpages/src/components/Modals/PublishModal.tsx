@@ -17,13 +17,18 @@ export interface Props {
     onPublish: () => void;
 }
 
+type PageType = 'home' | '404' | null;
+
 const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onPublish }: Props) => {
     const [slug, setSlug] = useState(page.wp_slug ?? page.lp_slug ?? '');
-    const [isHome, setIsHome] = useState(page.wp_page_type === 'home');
+    // A page holds at most one WordPress page type, so the homepage and 404 options exclude each other.
+    const [pageType, setPageType] = useState<PageType>(
+        page.wp_page_type === 'home' || page.wp_page_type === '404' ? page.wp_page_type : null
+    );
     const [loading, setLoading] = useState(false);
     const [cacheClearSuccess, setCacheClearSuccess] = useState(false);
     const [notice, setNotice] = useState<{ show: boolean; messages: string[] }>({ show: false, messages: [] });
-    const [replaceConflict, setReplaceConflict] = useState<string | null>(null);
+    const [replaceConflict, setReplaceConflict] = useState<{ message: string; pageType: PageType } | null>(null);
 
     const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSlug(e.target.value);
@@ -31,8 +36,16 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
         setReplaceConflict(null);
     };
 
+    // The replace prompt reflects the role chosen when Publish was clicked, so changing the role
+    // clears it and the next Publish asks again with an accurate warning.
     const handleHomeChange = (checked: boolean) => {
-        setIsHome(checked);
+        setPageType(checked ? 'home' : null);
+        setReplaceConflict(null);
+    };
+
+    const handleNotFoundChange = (checked: boolean) => {
+        setPageType(checked ? '404' : null);
+        setReplaceConflict(null);
     };
 
     const handleDismissNotice = () => {
@@ -57,7 +70,7 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
                 data: {
                     slug,
                     published: true, // this only manages published pages
-                    pageType: isHome ? 'home' : null,
+                    pageType,
                     replace, // replace a page from either platform already at this slug
                 },
             });
@@ -68,7 +81,7 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
             // A landing page (possibly on the other platform) already holds this slug. Offer to
             // hand the slug off rather than failing, preserving the same URL.
             if (error.code === 'slug_taken_by_page') {
-                setReplaceConflict(error.message);
+                setReplaceConflict({ message: error.message, pageType: error.data.conflictingPageType ?? null });
             } else {
                 handleFetchError(error);
             }
@@ -92,6 +105,13 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
     };
 
     const buttonText = variant === 'publish' ? 'Publish' : 'Save';
+
+    // Replacing a page hands its homepage or 404 role to this page, unless this page takes the other
+    // role, in which case the site loses the role the replaced page held.
+    const lostRole =
+        replaceConflict?.pageType && pageType && replaceConflict.pageType !== pageType
+            ? { home: 'homepage', '404': '404 page' }[replaceConflict.pageType]
+            : null;
 
     // Setting width to 512px explicitly as the Modal "size" prop is relatively new
     // Setting max-height to 50vh just so that the modal isn't huge on mobile and all content is visible when there is an error
@@ -128,8 +148,14 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
                 <CheckboxControl
                     label="Use as my homepage"
                     help={`Also serve this page at ${HOME_URL}/ in place of your WordPress homepage. Replaces any other Leadpages page set as the homepage.`}
-                    checked={isHome}
+                    checked={pageType === 'home'}
                     onChange={handleHomeChange}
+                />
+                <CheckboxControl
+                    label="Use as my 404 page"
+                    help="Also show this page, with a 404 status, whenever a visitor requests a URL that does not exist on your site. Replaces any other Leadpages page set as the 404 page."
+                    checked={pageType === '404'}
+                    onChange={handleNotFoundChange}
                 />
             </div>
             {variant === 'edit' && (
@@ -153,7 +179,12 @@ const PublishModal: React.FC<Props> = ({ variant = 'publish', page, onClose, onP
             )}
             {replaceConflict && (
                 <div className="modal-section modal-replace-conflict">
-                    <p className="modal-grey">{replaceConflict}</p>
+                    <p className="modal-grey">{replaceConflict.message}</p>
+                    {lostRole && (
+                        <p className="modal-grey">
+                            {`That page is your ${lostRole}. Replacing it leaves your site without a Leadpages ${lostRole}.`}
+                        </p>
+                    )}
                     <Button variant="secondary" disabled={loading} onClick={() => handlePublish(true)}>
                         {loading ? 'Loading...' : `Replace the page at /${slug}`}
                     </Button>
