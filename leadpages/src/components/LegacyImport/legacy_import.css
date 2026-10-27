@@ -1,0 +1,67 @@
+@import "../LandingPages/landing_pages.css";
+
+.legacy-import p {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--lp-ink-2);
+    max-width: 720px;
+}
+
+.legacy-import-progress {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.legacy-import-progress p {
+    margin: 0;
+}
+
+.legacy-import-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.legacy-import-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-line);
+}
+
+.legacy-import-table th,
+.legacy-import-table td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--lp-line);
+    vertical-align: top;
+    font-size: 13px;
+}
+
+.legacy-import-status {
+    font-weight: 600;
+}
+
+.legacy-import-status--imported,
+.legacy-import-status--already_done {
+    color: #1e7e34;
+}
+
+.legacy-import-status--failed,
+.legacy-import-status--not_found,
+.legacy-import-status--skipped {
+    color: #b32d2e;
+}
+
+.legacy-import-message {
+    color: var(--lp-ink-2);
+    margin-top: 2px;
+}
+
+/* Focus moves here programmatically on each change of view; it is not a control. */
+.legacy-import .heading:focus {
+    outline: none;
+}

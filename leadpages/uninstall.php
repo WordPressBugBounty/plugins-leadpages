@@ -30,3 +30,5 @@ delete_option('lp_nova_access_token');
 delete_option('lp_nova_refresh_token');
 delete_option('lp_nova_popup_id');
 delete_option('lp_nova_popup_scope');
+delete_option('lp_legacy_import');
+delete_option('lp_legacy_import_lock');

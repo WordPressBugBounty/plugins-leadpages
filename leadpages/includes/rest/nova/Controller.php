@@ -308,6 +308,9 @@ class Controller {
         Options::delete(Options::$platform);
         Options::delete(Options::$nova_popup_id);
         Options::delete(Options::$nova_popup_scope);
+        // The last import ran against this account's pages, so the next account gets its own import.
+        Options::delete(Options::$legacy_import);
+        Options::delete(Options::$legacy_import_failure);
         $this->clear_transient_flow_state();
 
         // Drop this account's unpublished catalog so it does not linger for the next connection.

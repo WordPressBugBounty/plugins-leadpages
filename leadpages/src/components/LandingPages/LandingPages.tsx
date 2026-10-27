@@ -55,9 +55,11 @@ export const QUERY_INITIAL_STATE: QueryState = {
 
 export interface Props {
     onAuthenticationError: () => void;
+    // Present when the site has pages from the old Leadpages Connector plugin.
+    onShowLegacyImport?: () => void;
 }
 
-const LandingPages: React.FC<Props> = ({ onAuthenticationError }) => {
+const LandingPages: React.FC<Props> = ({ onAuthenticationError, onShowLegacyImport }) => {
     const [loadingData, setLoadingData] = useState(true);
     const [loadingSync, setLoadingSync] = useState(false);
     const [pages, setPages] = useState<Array<LandingPage>>([]);
@@ -315,6 +317,11 @@ const LandingPages: React.FC<Props> = ({ onAuthenticationError }) => {
                     <RefreshIcon />
                     Refresh
                 </Button>
+                {onShowLegacyImport && (
+                    <Button variant="secondary" type="button" onClick={onShowLegacyImport}>
+                        Old Connector pages
+                    </Button>
+                )}
             </form>
             <div
                 style={{

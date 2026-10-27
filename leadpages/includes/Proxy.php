@@ -62,7 +62,7 @@ class Proxy {
         }
 
         $current_url = self::get_current_url();
-        $slug = sanitize_title($this->parse_request($current_url));
+        $slug = sanitize_title(self::parse_request($current_url));
 
         // The root URL resolves to an empty slug; only serve_home_page may serve it.
         $page = '' === $slug ? null : Page::get_by_slug($slug);
@@ -277,12 +277,12 @@ class Proxy {
      * @param string $url
      * @return string
      */
-    private function parse_request( $url ) {
+    private static function parse_request( $url ) {
         $path_and_params = substr($url, strlen(home_url()));
         $path = explode('?', $path_and_params);
         $tokens = explode('/', $path[0]);
 
-        $permalink_structure = $this->clean_permalink_for_leadpage();
+        $permalink_structure = self::clean_permalink_for_leadpage();
         $tokens = array_diff($tokens, $permalink_structure);
 
         foreach ($tokens as $index => $token) {
@@ -304,7 +304,7 @@ class Proxy {
      *
      * @return string[]
      */
-    private function clean_permalink_for_leadpage() {
+    private static function clean_permalink_for_leadpage() {
         $permalink_structure = explode('/', Options::get(Options::$permalink_structure));
         foreach ($permalink_structure as $key => $value) {
             if (empty($value) || strpos($value, '%') !== false) {
@@ -415,6 +415,17 @@ class Proxy {
      */
     public function lp_exit() {
         exit(0);
+    }
+
+    /**
+     * The slug serve_landing_page looks up when a browser requests this site path. The path must
+     * already be encoded the way a browser sends it.
+     *
+     * @param string $path the request path below home_url(), e.g. "offers/black-friday"
+     * @return string
+     */
+    public static function slug_for_request_path( $path ) {
+        return sanitize_title(self::parse_request(esc_url_raw(home_url() . sanitize_text_field('/' . $path))));
     }
 
     private static function get_current_url() {

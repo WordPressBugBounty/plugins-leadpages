@@ -7,6 +7,7 @@ defined('ABSPATH') || die('No script kiddies please!'); // Avoid direct file req
 use Leadpages\rest\pages\Controller as PagesController;
 use Leadpages\rest\oauth2\Controller as OAuth2Controller;
 use Leadpages\rest\nova\Controller as NovaController;
+use Leadpages\rest\legacy\Controller as LegacyController;
 
 /**
  * A class to manage the /leadpages REST API endpoints within the WordPress.
@@ -22,6 +23,9 @@ class Service {
     /** @var NovaController */
     private $nova_controller;
 
+    /** @var LegacyController */
+    private $legacy_controller;
+
     /**
      * Initialize REST Service controller classes.
      */
@@ -29,6 +33,7 @@ class Service {
         $this->pages_controller = new PagesController();
         $this->oauth2_controller = new OAuth2Controller();
         $this->nova_controller = new NovaController();
+        $this->legacy_controller = new LegacyController();
         // add more controllers here
     }
 
@@ -39,5 +44,6 @@ class Service {
         $this->pages_controller->register_routes();
         $this->oauth2_controller->register_routes();
         $this->nova_controller->register_routes();
+        $this->legacy_controller->register_routes();
     }
 }

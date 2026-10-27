@@ -20,11 +20,29 @@ class Config {
      * Initialize plugin configuration based on the environment the plugin is running in.
      */
     private function __construct() {
-        $environment = wp_get_environment_type();
-        if ('staging' === $environment) {
-            $environment = 'development';
+        $override = defined('LEADPAGES_CONFIG_ENV') ? LEADPAGES_CONFIG_ENV : null;
+        $this->config = $this->get_config(self::resolve_environment(wp_get_environment_type(), $override));
+    }
+
+    /**
+     * Pick the config file for a site.
+     *
+     * Customer sites set WordPress's environment type to "local" too (LocalWP, a host's dev copy),
+     * so "local" alone must not load local.config.php and its docker URLs. Only our own docker
+     * setup reaches it, by defining LEADPAGES_CONFIG_ENV.
+     *
+     * @param string      $wp_environment - wp_get_environment_type()
+     * @param string|null $override - LEADPAGES_CONFIG_ENV, when defined
+     * @return string
+     */
+    public static function resolve_environment( $wp_environment, $override ) {
+        if (null !== $override) {
+            return $override;
         }
-        $this->config = $this->get_config($environment);
+        if ('staging' === $wp_environment || 'development' === $wp_environment) {
+            return 'development';
+        }
+        return 'production';
     }
 
     /**

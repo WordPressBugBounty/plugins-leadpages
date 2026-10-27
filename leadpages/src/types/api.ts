@@ -83,3 +83,30 @@ export interface WPResponseError {
         };
     };
 }
+
+export type LegacyImportStatus = 'imported' | 'already_done' | 'skipped' | 'not_found' | 'failed';
+
+export interface LegacyImportPage {
+    path: string;
+    role: 'home' | '404' | null;
+    title: string | null;
+    status: LegacyImportStatus;
+    message: string;
+}
+
+export interface LegacyImportResult {
+    ranAt: string;
+    pages: LegacyImportPage[];
+}
+
+// The last import that did not finish, until one does.
+export interface LegacyImportFailure {
+    attemptedAt: string;
+    message: string;
+}
+
+export interface LegacyImportStatusResponse {
+    legacyPageCount: number;
+    result: LegacyImportResult | null;
+    failure: LegacyImportFailure | null;
+}

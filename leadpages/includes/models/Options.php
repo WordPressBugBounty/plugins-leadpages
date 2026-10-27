@@ -50,6 +50,12 @@ class Options {
     // [ 'mode' => 'specific', 'slugs' => string[] ] to limit the pop-up to those page/post slugs.
     public static $nova_popup_scope = LEADPAGES_OPT_PREFIX . '_nova_popup_scope';
 
+    // The result of the last import of pages from the old Leadpages Connector plugin, the last import
+    // that did not finish (cleared by the next one that does), and the lock held while an import runs.
+    public static $legacy_import = LEADPAGES_OPT_PREFIX . '_legacy_import';
+    public static $legacy_import_failure = LEADPAGES_OPT_PREFIX . '_legacy_import_failure';
+    public static $legacy_import_lock = LEADPAGES_OPT_PREFIX . '_legacy_import_lock';
+
     /*
      * Get and return an option with the given name
      *
@@ -99,5 +105,8 @@ class Options {
         self::delete(self::$nova_access_token);
         self::delete(self::$nova_popup_id);
         self::delete(self::$nova_popup_scope);
+        self::delete(self::$legacy_import);
+        self::delete(self::$legacy_import_failure);
+        self::delete(self::$legacy_import_lock);
     }
 }
