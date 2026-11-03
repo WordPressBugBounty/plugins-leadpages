@@ -3,7 +3,7 @@ Tags: landing page, lead generation, leadpages, form builder, sales page
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.6.0
+Stable tag: 1.6.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -116,6 +116,13 @@ No! Leadpages does not put a limit on your leads so collect as many as you like.
 6. Migrate from Classic to the new Leadpages while keeping the same URL.
 
 == Changelog ==
+
+= 1.6.1 =
+* Release Date: 11/03/2026
+- Fix: Leadpages pages answer HEAD requests (used by uptime monitors and link checkers) the same as GET, instead of with a 404.
+- Change: Pages from the old Leadpages Connector plugin are no longer republished on their own. After you sign in, you get a list of the old plugin's pages that aren't live yet, and you choose which ones to republish. Pages you leave unchecked stay off, and you can come back to them any time from Old Connector pages. Only pages that were published in the old plugin are listed; drafts and private pages are left alone.
+- Fix: Updates after this one keep the plugin in the folder it is installed in, so it stays active when installed under a folder other than leadpages.
+- Fix: Deleting one copy of the plugin no longer deletes the page settings another installed copy still uses.
 
 = 1.6.0 =
 * Release Date: 10/26/2026

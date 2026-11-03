@@ -105,8 +105,16 @@ export interface LegacyImportFailure {
     message: string;
 }
 
+// A page from the old plugin that is not live on this site yet, with each old URL it was served at.
+export interface LegacyPendingPage {
+    id: number;
+    title: string;
+    urls: { path: string; role: 'home' | '404' | null }[];
+}
+
 export interface LegacyImportStatusResponse {
     legacyPageCount: number;
+    pages: LegacyPendingPage[];
     result: LegacyImportResult | null;
     failure: LegacyImportFailure | null;
 }

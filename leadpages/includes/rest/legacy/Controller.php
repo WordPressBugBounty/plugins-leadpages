@@ -31,8 +31,11 @@ use WP_REST_Response;
  *
  * The import only reads the legacy data. It never edits or deletes it.
  *
- *   GET  /leadpages/v1/legacy-import - whether legacy pages exist, and the last import result
- *   POST /leadpages/v1/legacy-import - run the import
+ * Nothing is republished on its own (HP-7712): the old plugin's records can name far more pages than it
+ * had live, so the owner reviews the pending pages and picks the ones to republish.
+ *
+ *   GET  /leadpages/v1/legacy-import - the legacy pages not live yet, and the last import result
+ *   POST /leadpages/v1/legacy-import - republish the legacy pages listed in `postIds`
  */
 class Controller {
 
@@ -69,6 +72,15 @@ class Controller {
                     'methods'             => 'POST',
                     'callback'            => [ $this, 'run_import' ],
                     'permission_callback' => [ $this, 'permissions_check' ],
+                    'args'                => [
+                        'postIds' => [
+                            'description' => 'The legacy page posts to republish, as listed by GET',
+                            'type'        => 'array',
+                            'items'       => [ 'type' => 'integer' ],
+                            'minItems'    => 1,
+                            'required'    => true,
+                        ],
+                    ],
                 ],
             ]
         );
@@ -88,20 +100,12 @@ class Controller {
         // and offering it there would end in a "not connected" error on every click.
         $entries = $this->is_connected_to_nova() ? $this->read_legacy_entries() : [];
 
-        // A site already moved over by hand (e.g. republished on 1.5.0) serves these pages again, so it
-        // must not be asked to republish them: count only pages none of whose old URLs is served yet.
-        $served_post_ids = [];
-        foreach ($entries as $entry) {
-            if ($this->is_served($entry)) {
-                $served_post_ids[ $entry['post_id'] ] = true;
-            }
-        }
-        $post_ids = array_diff(array_unique(array_column($entries, 'post_id')), array_keys($served_post_ids));
+        $pages = $this->pending_pages($entries);
 
         return new WP_REST_Response(
             [
-                // Pages, not URLs: the homepage or 404 page usually also has its own path entry.
-                'legacyPageCount' => count($post_ids),
+                'legacyPageCount' => count($pages),
+                'pages'           => $pages,
                 'result'          => $result ? $result : null,
                 'failure'         => $failure ? $failure : null,
             ]
@@ -109,9 +113,46 @@ class Controller {
     }
 
     /**
+     * The legacy pages to offer for review, one per post: the homepage or 404 page usually also has its
+     * own path entry. A site already moved over by hand (e.g. republished on 1.5.0) serves these pages
+     * again, so it must not be asked to republish them: only pages none of whose old URLs is served yet.
+     *
+     * @param array[] $entries
+     * @return array[] each [ 'id' => int, 'title' => string, 'urls' => [ [ 'path' => string, 'role' => string|null ] ] ]
+     */
+    private function pending_pages( $entries ) {
+        $pages = [];
+        $served = [];
+        foreach ($entries as $entry) {
+            $post_id = $entry['post_id'];
+            if (isset($served[ $post_id ])) {
+                continue;
+            }
+            if ($this->is_served($entry)) {
+                $served[ $post_id ] = true;
+                unset($pages[ $post_id ]);
+                continue;
+            }
+            if (! isset($pages[ $post_id ])) {
+                $pages[ $post_id ] = [
+                    'id'    => $post_id,
+                    'title' => $entry['title'],
+                    'urls'  => [],
+                ];
+            }
+            $pages[ $post_id ]['urls'][] = [
+                'path' => $entry['path'],
+                'role' => $entry['role'],
+            ];
+        }
+        return array_values($pages);
+    }
+
+    /**
+     * @param WP_REST_Request $request
      * @return WP_Error|WP_REST_Response
      */
-    public function run_import() {
+    public function run_import( $request ) {
         if (! $this->is_connected_to_nova()) {
             return new WP_Error('no_token', 'Connect the new Leadpages before importing pages', [ 'status' => 401 ]);
         }
@@ -160,7 +201,19 @@ class Controller {
                 return $this->record_failure($failure, $nova_ids_by_classic_id);
             }
 
-            $pages = $this->import_entries($this->read_legacy_entries(), $nova_ids_by_classic_id);
+            $selected = array_fill_keys(array_map('intval', (array) $request->get_param('postIds')), true);
+            $pages = $this->import_entries($this->read_legacy_entries(), $nova_ids_by_classic_id, $selected);
+            $any_imported = in_array('imported', array_column($pages, 'status'), true);
+
+            // Pages are republished in batches the owner picks, so keep the earlier report for every old
+            // URL this run did not touch.
+            $reported = array_fill_keys(array_map([ self::class, 'result_key' ], $pages), true);
+            $previous = Options::get(Options::$legacy_import);
+            foreach ($previous && isset($previous['pages']) ? $previous['pages'] : [] as $page) {
+                if (! isset($reported[ self::result_key($page) ])) {
+                    $pages[] = $page;
+                }
+            }
 
             $result = [
                 'ranAt' => gmdate('c'),
@@ -170,7 +223,7 @@ class Controller {
             update_option(Options::$legacy_import, $result, false);
             Options::delete(Options::$legacy_import_failure);
 
-            if (in_array('imported', array_column($pages, 'status'), true)) {
+            if ($any_imported) {
                 self::purge_page_caches();
             }
 
@@ -195,22 +248,20 @@ class Controller {
      *
      * Mirrors the old plugin's serving rules: a path is served by the oldest `leadpages_slug` meta
      * row holding it, a page of type `nf` (404) is never served at its path, and the homepage and
-     * 404 page come from their options. Trashed posts are left out, since the site owner deleted
-     * them.
+     * 404 page come from their options. Only published posts are read (HP-7712): the old plugin also
+     * served drafts and private posts at their paths, but a page its owner unpublished or trashed is
+     * not one they asked to have live again.
      *
-     * @return array[] each [ 'post_id' => int, 'path' => string, 'role' => 'home'|'404'|null, 'classic_id' => string ]
+     * @return array[] each [ 'post_id' => int, 'title' => string, 'path' => string, 'role' => 'home'|'404'|null, 'classic_id' => string ]
      */
     private function read_legacy_entries() {
         global $wpdb;
 
-        $live_statuses = "p.post_status NOT IN ('trash', 'auto-draft')";
-
         $rows = $wpdb->get_results(
             $wpdb->prepare(
-                // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-                "SELECT pm.post_id, pm.meta_value FROM $wpdb->postmeta pm
+                "SELECT pm.post_id, pm.meta_value, p.post_title FROM $wpdb->postmeta pm
                 INNER JOIN $wpdb->posts p ON p.ID = pm.post_id
-                WHERE pm.meta_key = 'leadpages_slug' AND p.post_type = %s AND $live_statuses
+                WHERE pm.meta_key = 'leadpages_slug' AND p.post_type = %s AND p.post_status = 'publish'
                 ORDER BY pm.meta_id ASC",
                 self::LEGACY_POST_TYPE
             )
@@ -229,7 +280,7 @@ class Controller {
             if ('nf' === get_post_meta((int) $row->post_id, 'leadpages_post_type', true)) {
                 continue;
             }
-            $entries[] = $this->legacy_entry((int) $row->post_id, $path, null);
+            $entries[] = $this->legacy_entry((int) $row->post_id, $row->post_title, $path, null);
         }
 
         // A list of pairs, not a map: PHP would turn a '404' key into the integer 404.
@@ -237,8 +288,8 @@ class Controller {
         foreach ($special_pages as list($role, $option)) {
             $post_id = (int) get_option($option);
             $post = $post_id > 0 ? get_post($post_id) : null;
-            if ($post && self::LEGACY_POST_TYPE === $post->post_type && 'trash' !== $post->post_status) {
-                $entries[] = $this->legacy_entry($post_id, '', $role);
+            if ($post && self::LEGACY_POST_TYPE === $post->post_type && 'publish' === $post->post_status) {
+                $entries[] = $this->legacy_entry($post_id, $post->post_title, '', $role);
             }
         }
 
@@ -273,13 +324,14 @@ class Controller {
         return $post && 'publish' === $post->post_status && self::LEGACY_POST_TYPE !== $post->post_type ? $post : null;
     }
 
-    private function legacy_entry( $post_id, $path, $role ) {
+    private function legacy_entry( $post_id, $title, $path, $role ) {
         $classic_id = (string) get_post_meta($post_id, 'leadpages_page_id', true);
         if (0 === strpos($classic_id, 'cid-')) {
             $classic_id = substr($classic_id, 4);
         }
         return [
             'post_id'    => $post_id,
+            'title'      => (string) $title,
             'path'       => $path,
             'role'       => $role,
             'classic_id' => $classic_id,
@@ -343,11 +395,15 @@ class Controller {
      * plugin: at the first path, as the homepage when one of them is the homepage (or else the 404
      * page). The other entries for that page are reported as skipped.
      *
+     * Every legacy entry still counts toward the URL collisions below, selected or not, so a selected
+     * page is never published at a slug that would also answer an old URL the owner left off.
+     *
      * @param array[] $entries
      * @param array<string, string[]> $nova_ids_by_classic_id
-     * @return array[] one result per entry: path, role, title, status, message
+     * @param array<int, true> $selected the post ids to republish
+     * @return array[] one result per selected entry: path, role, title, status, message
      */
-    private function import_entries( $entries, $nova_ids_by_classic_id ) {
+    private function import_entries( $entries, $nova_ids_by_classic_id, $selected ) {
         $results = [];
         $groups = [];
 
@@ -362,6 +418,9 @@ class Controller {
         }
 
         foreach ($entries as $entry) {
+            if (! isset($selected[ $entry['post_id'] ])) {
+                continue;
+            }
             $nova_ids = isset($nova_ids_by_classic_id[ $entry['classic_id'] ])
                 ? array_values(array_unique($nova_ids_by_classic_id[ $entry['classic_id'] ]))
                 : [];
@@ -624,6 +683,17 @@ class Controller {
             $path
         );
         return Proxy::slug_for_request_path($encoded);
+    }
+
+    /**
+     * Identifies the old URL a result reports on: its path, or its role for a homepage or 404 page
+     * served at no path.
+     *
+     * @param array $result
+     * @return string
+     */
+    private static function result_key( $result ) {
+        return '' === $result['path'] ? 'role:' . $result['role'] : 'path:' . strtolower($result['path']);
     }
 
     private function result( $entry, $title, $status, $message ) {

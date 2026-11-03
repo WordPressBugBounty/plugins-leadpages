@@ -57,7 +57,7 @@ class Proxy {
      * @return void
      */
     public function serve_landing_page() {
-        if (! $this->is_get_request()) {
+        if (! $this->is_page_request()) {
             return;
         }
 
@@ -90,7 +90,7 @@ class Proxy {
         global $wp;
         $is_root = is_front_page() || ( 'page' === get_option('show_on_front') && empty($wp->query_vars) );
         if (
-            ! $this->is_get_request() || ! $is_root || is_paged() || is_feed() || is_embed()
+            ! $this->is_page_request() || ! $is_root || is_paged() || is_feed() || is_embed()
             || is_preview() || is_customize_preview()
         ) {
             return;
@@ -115,7 +115,7 @@ class Proxy {
      * @return void
      */
     public function serve_not_found_page() {
-        if (! $this->is_get_request() || ! is_404()) {
+        if (! $this->is_page_request() || ! is_404()) {
             return;
         }
 
@@ -141,10 +141,14 @@ class Proxy {
     }
 
     /**
+     * GET, or HEAD, which uptime monitors and link checkers send and which must get the same status as
+     * GET. The web server drops the body of a HEAD response.
+     *
      * @return bool
      */
-    private function is_get_request() {
-        return isset($_SERVER['REQUEST_METHOD']) && 'get' === sanitize_key($_SERVER['REQUEST_METHOD']);
+    private function is_page_request() {
+        return isset($_SERVER['REQUEST_METHOD'])
+            && in_array(sanitize_key($_SERVER['REQUEST_METHOD']), [ 'get', 'head' ], true);
     }
 
     /**

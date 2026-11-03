@@ -65,3 +65,19 @@
 .legacy-import .heading:focus {
     outline: none;
 }
+
+.legacy-import-selection {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    font-size: 13px;
+}
+
+.legacy-import-table .legacy-import-check {
+    width: 24px;
+}
+
+.legacy-import-table label {
+    cursor: pointer;
+}

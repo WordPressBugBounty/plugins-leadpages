@@ -26,8 +26,8 @@ const LeadpagesView: React.FC = () => {
                     () => null
                 )) as LegacyImportStatusResponse | null;
                 // legacyPageCount counts only old pages nothing on the site serves yet, so a site moved
-                // over by hand never runs the import. Opening the screen with pages pending and no stored
-                // result starts the import, unless the last attempt did not finish; once it has run, the
+                // over by hand is never asked. With pages pending and no stored result the screen opens on
+                // the review list, where the owner picks what to republish; once a batch has run, the
                 // result stays one click away.
                 if (status?.legacyPageCount || status?.result) {
                     setLegacyImport(status);
@@ -76,7 +76,7 @@ const LeadpagesView: React.FC = () => {
     if (legacyImport && showLegacyImport) {
         return (
             <LegacyImport
-                legacyPageCount={legacyImport.legacyPageCount}
+                pages={legacyImport.pages}
                 initialResult={legacyImport.result}
                 initialFailure={legacyImport.failure}
                 onDone={handleLegacyImportDone}

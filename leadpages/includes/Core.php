@@ -78,6 +78,7 @@ class Core {
         add_action('plugins_loaded', [ $this->get_activator(), 'update_db_check' ]);
         add_action('plugins_loaded', [ $this, 'detect_plugin_conflicts' ]);
         register_deactivation_hook(LEADPAGES_FILE, [ $this->get_activator(), 'deactivate' ]);
+        add_filter('upgrader_source_selection', [ $this, 'keep_plugin_folder' ], 10, 4);
 
         add_filter('wp_insert_post_data', [ $this, 'check_and_modify_post_slug' ], 1, 1);
         add_action('wp_enqueue_scripts', [ $this->get_popups(), 'inject_embed' ]);
@@ -172,6 +173,42 @@ class Core {
                 'p'   => [],
             ]
         );
+    }
+
+    /**
+     * Install an update of this plugin into the folder it is already in. The wordpress.org package
+     * unpacks to `leadpages/`, so without this an update of a copy installed under another folder
+     * name (`leadpages-new/`, say) lands in `leadpages/`, replacing whatever is there, and WordPress
+     * deactivates the copy that was running because its file is gone.
+     *
+     * @param string $source        the unpacked package folder
+     * @param string $remote_source the working folder the package was unpacked into
+     * @param mixed  $upgrader      the upgrader instance
+     * @param array  $hook_extra    the plugin being updated, under `plugin`
+     * @return string|\WP_Error
+     */
+    public function keep_plugin_folder( $source, $remote_source, $upgrader, $hook_extra ) {
+        global $wp_filesystem;
+
+        if (
+            is_wp_error($source) || ! isset($hook_extra['plugin'])
+            || 'leadpages-official.php' !== basename($hook_extra['plugin'])
+        ) {
+            return $source;
+        }
+
+        $folder = dirname($hook_extra['plugin']);
+        if (basename($source) === $folder) {
+            return $source;
+        }
+
+        $target = trailingslashit($remote_source) . $folder;
+        // Installing under the package's folder would replace whatever lives there, so stop the update.
+        if (! $wp_filesystem || ! $wp_filesystem->move($source, $target, true)) {
+            return new \WP_Error('leadpages_keep_folder', 'Could not keep the Leadpages plugin in its folder.');
+        }
+
+        return trailingslashit($target);
     }
 
     /**

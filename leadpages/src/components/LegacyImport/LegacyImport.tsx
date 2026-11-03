@@ -3,12 +3,15 @@ import { Button, Spinner } from '@wordpress/components';
 import apiFetch from '@wordpress/api-fetch';
 
 import NoticeManager from '../NoticeManager';
+import Pagination from '../Pagination';
 import { getErrorMessage, AUTH_ERROR_CODES } from '../../utils/api';
 import {
     LegacyImportFailure,
     LegacyImportPage,
     LegacyImportResult,
     LegacyImportStatus,
+    LegacyImportStatusResponse,
+    LegacyPendingPage,
     WPResponseError,
 } from '../../types/api';
 import './legacy_import.css';
@@ -21,66 +24,75 @@ const STATUS_LABELS: Record<LegacyImportStatus, string> = {
     failed: 'Failed',
 };
 
-const pageUrl = (page: LegacyImportPage) => {
+const pageUrl = (page: Pick<LegacyImportPage, 'path' | 'role'>) => {
     if (page.role === 'home') return 'Homepage';
     if (page.role === '404') return '404 page';
     return `/${page.path}`;
 };
 
+const pageCount = (count: number) => `${count} ${count === 1 ? 'page' : 'pages'}`;
+
 export interface Props {
-    legacyPageCount: number;
+    pages: LegacyPendingPage[];
     initialResult: LegacyImportResult | null;
     initialFailure: LegacyImportFailure | null;
     onDone: () => void;
     onAuthenticationError: () => void;
 }
 
-const LegacyImport: React.FC<Props> = ({
-    legacyPageCount,
-    initialResult,
-    initialFailure,
-    onDone,
-    onAuthenticationError,
-}) => {
-    // Signing in to the new Leadpages is the go-ahead: the pages are down until this runs, and the import
-    // only fills old URLs nothing on the site serves yet. It starts once, on the first visit with no
-    // stored result; after that, or after an attempt that did not finish, it waits for a click.
-    const autoStart = !initialResult && !initialFailure;
-    // Start on the loading screen when the import starts on mount, so the retry screen never flashes first.
-    const [importing, setImporting] = useState(autoStart);
+const LegacyImport: React.FC<Props> = ({ pages, initialResult, initialFailure, onDone, onAuthenticationError }) => {
+    const [pending, setPending] = useState(pages);
+    // The old plugin's records can name far more pages than it had live, so nothing is republished until
+    // the owner picks the pages. The first review starts with every page checked; a later one starts empty,
+    // so the pages left off last time are not put forward again.
+    const [selected, setSelected] = useState<Set<number>>(
+        () => new Set(initialResult ? [] : pages.map((page) => page.id))
+    );
+    const [reviewing, setReviewing] = useState(!initialResult);
+    const [importing, setImporting] = useState(false);
     const [result, setResult] = useState<LegacyImportResult | null>(initialResult);
     const [error, setError] = useState<string | null>(initialFailure ? initialFailure.message : null);
+    const [listPage, setListPage] = useState(1);
+    const [perPage, setPerPage] = useState(20);
     const headingRef = useRef<HTMLHeadingElement>(null);
-    const autoStarted = useRef(false);
-    let view = 'intro';
+    let view = 'result';
     if (importing) {
         view = 'importing';
-    } else if (result) {
-        view = 'result';
+    } else if (reviewing || !result) {
+        view = 'review';
     }
 
     // The clicked button disappears with each change of view, so move focus to the new heading. That
     // also makes screen readers announce the loading and result screens.
+    const firstView = useRef(true);
     useEffect(() => {
-        if (view !== 'intro') {
-            headingRef.current?.focus();
+        if (firstView.current) {
+            firstView.current = false;
+            return;
         }
+        headingRef.current?.focus();
     }, [view]);
-
-    useEffect(() => {
-        if (autoStart && !autoStarted.current) {
-            autoStarted.current = true;
-            handleImport();
-        }
-        // Mount only: re-running on a new autoStart or handleImport would start a second import.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     const handleImport = async () => {
         setImporting(true);
         setError(null);
         try {
-            setResult((await apiFetch({ path: '/leadpages/v1/legacy-import', method: 'POST' })) as LegacyImportResult);
+            const importResult = (await apiFetch({
+                path: '/leadpages/v1/legacy-import',
+                method: 'POST',
+                data: { postIds: Array.from(selected) },
+            })) as LegacyImportResult;
+            setResult(importResult);
+            setReviewing(false);
+            setSelected(new Set());
+            setListPage(1);
+            // Pages now live drop off the list; the ones left off stay for a later review.
+            const status = (await apiFetch({ path: '/leadpages/v1/legacy-import' }).catch(
+                () => null
+            )) as LegacyImportStatusResponse | null;
+            if (status) {
+                setPending(status.pages);
+            }
         } catch (e) {
             const err = e as WPResponseError;
             if (AUTH_ERROR_CODES.indexOf(err.code) !== -1) {
@@ -93,6 +105,27 @@ const LegacyImport: React.FC<Props> = ({
         }
     };
 
+    const handleToggle = (id: number) => {
+        const next = new Set(selected);
+        if (next.has(id)) {
+            next.delete(id);
+        } else {
+            next.add(id);
+        }
+        setSelected(next);
+    };
+
+    const handleTogglePage = (rows: LegacyPendingPage[], checked: boolean) => {
+        const next = new Set(selected);
+        rows.forEach((row) => (checked ? next.add(row.id) : next.delete(row.id)));
+        setSelected(next);
+    };
+
+    const handleListPage = (page: number, size: number) => {
+        setListPage(page);
+        setPerPage(size);
+    };
+
     if (importing) {
         return (
             <div className="root legacy-import" role="status" aria-live="polite">
@@ -102,16 +135,16 @@ const LegacyImport: React.FC<Props> = ({
                 <div className="legacy-import-progress">
                     <Spinner />
                     <p>
-                        We’re matching the {legacyPageCount === 1 ? 'page' : 'pages'} from the old Leadpages Connector
-                        to your Leadpages account and putting each one back at its old URL. On a site with many pages
-                        this can take a few minutes. Keep this tab open.
+                        We’re matching the {selected.size === 1 ? 'page' : 'pages'} you picked to your Leadpages account
+                        and putting each one back at its old URL. On a site with many pages this can take a few minutes.
+                        Keep this tab open.
                     </p>
                 </div>
             </div>
         );
     }
 
-    if (result) {
+    if (view === 'result' && result) {
         const live = result.pages.filter((page) => page.status === 'imported' || page.status === 'already_done');
         const nothingMatched = result.pages.length > 0 && result.pages.every((page) => page.status === 'not_found');
         return (
@@ -122,6 +155,8 @@ const LegacyImport: React.FC<Props> = ({
                 <p className="legacy-import-summary">
                     {live.length} of {result.pages.length} {result.pages.length === 1 ? 'page is' : 'pages are'} live at{' '}
                     {result.pages.length === 1 ? 'its' : 'their'} old URL.
+                    {pending.length > 0 &&
+                        ` ${pageCount(pending.length)} from the old plugin ${pending.length === 1 ? 'is' : 'are'} still not live.`}
                 </p>
                 {nothingMatched && (
                     <NoticeManager
@@ -132,7 +167,6 @@ const LegacyImport: React.FC<Props> = ({
                         ]}
                     />
                 )}
-                {error && <NoticeManager status="error" isDismissible={false} messages={[error]} />}
                 <table className="legacy-import-table">
                     <thead>
                         <tr>
@@ -160,29 +194,94 @@ const LegacyImport: React.FC<Props> = ({
                     <Button variant="primary" onClick={onDone}>
                         Continue to your pages
                     </Button>
-                    <Button variant="secondary" onClick={handleImport}>
-                        Run the import again
-                    </Button>
+                    {pending.length > 0 && (
+                        <Button variant="secondary" onClick={() => setReviewing(true)}>
+                            Choose more pages to republish
+                        </Button>
+                    )}
                 </div>
             </div>
         );
     }
 
+    const lastPage = Math.max(1, Math.ceil(pending.length / perPage));
+    const currentPage = Math.min(listPage, lastPage);
+    const rows = pending.slice((currentPage - 1) * perPage, currentPage * perPage);
+    const allRowsChecked = rows.length > 0 && rows.every((row) => selected.has(row.id));
+
     return (
         <div className="root legacy-import">
-            <h1 className="heading">We couldn’t republish your pages yet</h1>
+            <h1 className="heading" ref={headingRef} tabIndex={-1}>
+                Choose the pages to republish
+            </h1>
             <p>
-                {legacyPageCount === 1
-                    ? 'This site has 1 page from the old Leadpages Connector plugin that isn’t live yet. Try again to republish it at its old URL using the matching page in your Leadpages account.'
-                    : `This site has ${legacyPageCount} pages from the old Leadpages Connector plugin that aren’t live yet. Try again to republish them at their old URLs using the matching pages in your Leadpages account.`}
+                {pending.length === 1
+                    ? 'This page was published with the old Leadpages Connector plugin and isn’t live on this site yet.'
+                    : `These ${pending.length} pages were published with the old Leadpages Connector plugin and aren’t live on this site yet.`}{' '}
+                Each page you check goes back live at its old URL, using the matching page in your Leadpages account.
             </p>
-            <p>Nothing on your site is deleted. Pages we can’t match are listed so you can publish them yourself.</p>
+            <p>
+                Pages you leave unchecked stay off. You can come back to them any time from Old Connector pages. Nothing
+                on your site is deleted.
+            </p>
             {error && <NoticeManager status="error" isDismissible={false} messages={[error]} />}
-            <div className="legacy-import-actions">
-                <Button variant="primary" onClick={handleImport}>
-                    Try again
+            <div className="legacy-import-selection">
+                <span>
+                    {selected.size} of {pageCount(pending.length)} selected
+                </span>
+                <Button
+                    variant="link"
+                    disabled={selected.size === pending.length}
+                    onClick={() => setSelected(new Set(pending.map((page) => page.id)))}
+                >
+                    Select all {pending.length}
                 </Button>
-                <Button variant="tertiary" onClick={onDone}>
+                <Button variant="link" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>
+                    Clear selection
+                </Button>
+            </div>
+            <table className="legacy-import-table">
+                <thead>
+                    <tr>
+                        <th className="legacy-import-check">
+                            <input
+                                type="checkbox"
+                                aria-label="Select every page on this screen"
+                                checked={allRowsChecked}
+                                onChange={(event) => handleTogglePage(rows, event.target.checked)}
+                            />
+                        </th>
+                        <th>Page in the old plugin</th>
+                        <th>Old URL</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((page) => (
+                        <tr key={page.id}>
+                            <td className="legacy-import-check">
+                                <input
+                                    type="checkbox"
+                                    id={`legacy-import-page-${page.id}`}
+                                    checked={selected.has(page.id)}
+                                    onChange={() => handleToggle(page.id)}
+                                />
+                            </td>
+                            <td>
+                                <label htmlFor={`legacy-import-page-${page.id}`}>{page.title || '(no title)'}</label>
+                            </td>
+                            <td>{page.urls.map(pageUrl).join(', ')}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+            {pending.length > 20 && (
+                <Pagination metaData={{ total: pending.length, page: currentPage, perPage }} onPage={handleListPage} />
+            )}
+            <div className="legacy-import-actions">
+                <Button variant="primary" disabled={selected.size === 0} onClick={handleImport}>
+                    {selected.size === 0 ? 'Republish selected pages' : `Republish ${pageCount(selected.size)}`}
+                </Button>
+                <Button variant="tertiary" onClick={result ? () => setReviewing(false) : onDone}>
                     Not now
                 </Button>
             </div>
