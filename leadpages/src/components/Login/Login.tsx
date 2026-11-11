@@ -24,12 +24,12 @@ export interface Props {
 const Login: React.FC<Props> = ({ onLoginSuccess }) => {
     const [error, setError] = useState('');
 
-    // Start an OAuth connect flow against the given authorize endpoint. Both Classic and the new
-    // Leadpages (Nova) use the same PKCE popup + BroadcastChannel flow; only the endpoint differs.
-    const startConnect = async (authorizePath: string) => {
+    // Start the new Leadpages (Nova) OAuth connect flow: a PKCE popup that reports back over a
+    // BroadcastChannel. Classic sign-in is no longer offered; existing Classic connections keep working.
+    const handleNovaConnectClick = async () => {
         try {
             const url = (await apiFetch({
-                path: authorizePath,
+                path: 'leadpages/v1/nova/authorize',
             })) as string;
             window.open(url, 'oauth2Popup', 'width=800,height=800');
         } catch (err) {
@@ -49,10 +49,6 @@ const Login: React.FC<Props> = ({ onLoginSuccess }) => {
             }
         };
     };
-
-    const handleNovaConnectClick = () => startConnect('leadpages/v1/nova/authorize');
-
-    const handleLoginClick = () => startConnect('leadpages/v1/oauth2/authorize');
 
     return (
         <div className="login-root">
@@ -77,9 +73,6 @@ const Login: React.FC<Props> = ({ onLoginSuccess }) => {
                 <div className="login-connects">
                     <Button className="marketing-button contained" onClick={handleNovaConnectClick}>
                         Connect the new Leadpages
-                    </Button>
-                    <Button className="marketing-button outlined" onClick={handleLoginClick}>
-                        Log in to Classic Leadpages
                     </Button>
                 </div>
 

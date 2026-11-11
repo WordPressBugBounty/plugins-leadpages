@@ -3,7 +3,7 @@ Tags: landing page, lead generation, leadpages, form builder, sales page
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.6.1
+Stable tag: 1.6.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -56,10 +56,10 @@ To maximize your results, use Leadpages’ A/B testing tool. Create multiple ver
 
 == External services ==
 
-This plugin connects to Leadpages so it can publish and serve your Leadpages content on your WordPress site. It supports two Leadpages platforms: Classic Leadpages and the new Leadpages ("Nova"). You choose which account to connect. No data is sent to Leadpages until you connect an account.
+This plugin connects to Leadpages so it can publish and serve your Leadpages content on your WordPress site. New sign-ins connect to the new Leadpages ("Nova"). Classic Leadpages sign-in has been retired, but Classic pages already published to your site keep serving. No data is sent to Leadpages until you connect an account.
 
-Classic Leadpages (leadpages.com / leadpages.io):
-- When you connect, the plugin runs an OAuth 2.0 sign-in and stores the resulting access and refresh tokens in your WordPress options table. The tokens are never displayed and are erased when you sign out, deactivate, or uninstall the plugin.
+Classic Leadpages (leadpages.com / leadpages.io), for sites connected before Classic sign-in was retired:
+- When the site was connected, the plugin ran an OAuth 2.0 sign-in and stored the resulting access and refresh tokens in your WordPress options table. The tokens are never displayed and are erased when you sign out, deactivate, or uninstall the plugin.
 - When you sync, the plugin requests your landing page list and analytics from the Leadpages content API using your token.
 - When a visitor loads a connected page, the plugin fetches that page's published HTML from Leadpages and serves it at your WordPress URL.
 
@@ -78,9 +78,9 @@ Your use of Leadpages is governed by the Leadpages Terms of Service (https://lea
 
 On the Leadpages plugin screen, choose "Connect the new Leadpages" and complete the secure sign-in popup. Once connected, your published new-Leadpages pages appear in the plugin so you can publish them to a slug on your WordPress site, just like Classic pages.
 
-= Can I use both Classic and the new Leadpages? =
+= Can I still sign in with Classic Leadpages? =
 
-Each WordPress site connects to one Leadpages account (Classic or the new Leadpages) at a time. If you are migrating from Classic to the new Leadpages, you can publish a new-Leadpages page to a slug currently used by a Classic page and choose to replace it, keeping the same URL.
+No. The plugin only offers sign-in to the new Leadpages. Classic pages already published to your site keep serving, and a site still connected to Classic stays connected, but once it signs out it can only reconnect to the new Leadpages. Each WordPress site connects to one Leadpages account at a time. If you are migrating from Classic to the new Leadpages, you can publish a new-Leadpages page to a slug currently used by a Classic page and choose to replace it, keeping the same URL.
 
 = Why should I use Leadpages? =
 
@@ -116,6 +116,10 @@ No! Leadpages does not put a limit on your leads so collect as many as you like.
 6. Migrate from Classic to the new Leadpages while keeping the same URL.
 
 == Changelog ==
+
+= 1.6.2 =
+* Release Date: 11/11/2026
+- Change: The plugin no longer offers sign-in to Classic Leadpages. To connect a site, choose "Connect the new Leadpages". Classic pages already published to your site keep serving, and a site still connected to Classic stays connected.
 
 = 1.6.1 =
 * Release Date: 11/03/2026
